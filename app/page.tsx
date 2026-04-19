@@ -110,20 +110,17 @@ export default function Home() {
         <div className="brand">
           <div className="brandIcon">MS</div>
           <div className="brandBlock">
-            <strong className="brandTitle">Microsite Studio</strong>
-            <span className="brandCaption">Batch generation control plane</span>
+            <strong className="brandTitle">Create batch</strong>
+            <span className="brandCaption">Queue prospects and run generation</span>
           </div>
         </div>
 
         <div className="navCluster">
           <Link className="navLink" href="/microsites">
-            Microsites
-          </Link>
-          <Link className="navLink" href="/prompts">
-            Prompt Library
+            Open library
           </Link>
           <Link className="navLink" href="/observability">
-            Observability
+            View runs
           </Link>
         </div>
       </nav>

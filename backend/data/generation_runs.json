@@ -1,5 +1,76 @@
 [
   {
+    "id": "b8e6505efa6942ac93c3a445ac8f3084",
+    "company_name": "CRED",
+    "status": "completed",
+    "started_at": "2026-04-19T07:19:27.191744+00:00",
+    "completed_at": "2026-04-19T07:19:31.589564+00:00",
+    "total_duration_ms": 4397.81,
+    "model_name": "gpt-5.4-mini-2026-03-17",
+    "prompt_preview": "You are generating a lightweight but visually distinctive outbound sales microsite. Create clean first-touch copy for a single prospect company. Do not invent private facts, internal initiatives, or unverified stakeholder pain. Keep the cop",
+    "input_tokens": 490,
+    "output_tokens": 380,
+    "total_tokens": 870,
+    "llm_duration_ms": 4383.75,
+    "microsite_slug": "cred-8f35db",
+    "error": null,
+    "steps": [
+      {
+        "name": "collect_mcp_context",
+        "status": "skipped",
+        "started_at": "2026-04-19T07:19:27.202833+00:00",
+        "ended_at": "2026-04-19T07:19:27.203690+00:00",
+        "duration_ms": 0.86,
+        "metadata": {
+          "server_names": [],
+          "tool_names": [],
+          "context_chars": 0,
+          "prompt_item_name": null,
+          "source_company": "Razorpay"
+        }
+      },
+      {
+        "name": "prepare_prompt",
+        "status": "completed",
+        "started_at": "2026-04-19T07:19:27.204140+00:00",
+        "ended_at": "2026-04-19T07:19:27.204470+00:00",
+        "duration_ms": 0.32,
+        "metadata": {
+          "company_name": "CRED",
+          "source_company": "Razorpay",
+          "uses_mcp_context": false,
+          "mcp_server_names": [],
+          "prompt_item_name": "Default Microsite Generation"
+        }
+      },
+      {
+        "name": "generate_content",
+        "status": "completed",
+        "started_at": "2026-04-19T07:19:27.204750+00:00",
+        "ended_at": "2026-04-19T07:19:31.588517+00:00",
+        "duration_ms": 4383.75,
+        "metadata": {
+          "model_name": "gpt-5.4-mini-2026-03-17",
+          "input_tokens": 490,
+          "output_tokens": 380,
+          "total_tokens": 870,
+          "source_company": "Razorpay"
+        }
+      },
+      {
+        "name": "finalize_microsite",
+        "status": "completed",
+        "started_at": "2026-04-19T07:19:31.588967+00:00",
+        "ended_at": "2026-04-19T07:19:31.589409+00:00",
+        "duration_ms": 0.44,
+        "metadata": {
+          "slug": "cred-8f35db",
+          "source_company": "Razorpay"
+        }
+      }
+    ]
+  },
+  {
     "id": "7392ff140f9a4e2096fad3b5b056d8c6",
     "company_name": "Blue Atlas Energy",
     "status": "completed",

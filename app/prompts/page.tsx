@@ -265,19 +265,16 @@ export default function PromptsPage() {
           <div className="brandIcon">PL</div>
           <div className="brandBlock">
             <strong className="brandTitle">Prompt Library</strong>
-            <span className="brandCaption">Manage reusable stage prompts</span>
+            <span className="brandCaption">Stage-aware prompt editing and activation</span>
           </div>
         </div>
 
         <div className="navCluster">
           <Link className="navLink" href="/">
-            Create
+            New batch
           </Link>
-          <Link className="navLink" href="/microsites">
-            Microsites
-          </Link>
-          <Link className="navLink" href="/observability">
-            Observability
+          <Link className="navLink" href="/sandbox">
+            Open sandbox
           </Link>
         </div>
       </nav>

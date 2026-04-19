@@ -1175,6 +1175,51 @@ def get_generation_run(run_id: str) -> GenerationRunRecord:
     raise HTTPException(status_code=404, detail=f"Run '{run_id}' was not found")
 
 
+class SandboxGenerateRequest(BaseModel):
+    system_prompt: str = Field(description="The skill/system instructions for the LLM")
+    user_prompt: str = Field(description="The user prompt that asks the LLM to generate the HTML microsite")
+    model: str | None = None
+
+
+class SandboxGenerateResponse(BaseModel):
+    html: str
+    model_name: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    duration_ms: float
+
+
+@app.post("/api/sandbox/generate", response_model=SandboxGenerateResponse)
+def sandbox_generate(request: SandboxGenerateRequest) -> SandboxGenerateResponse:
+    model_name = request.model or get_openai_model_name()
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured")
+
+    llm = ChatOpenAI(model=model_name, api_key=api_key, temperature=0.9)
+    start_perf = time.perf_counter()
+
+    result = llm.invoke([
+        {"role": "system", "content": request.system_prompt},
+        {"role": "user", "content": request.user_prompt},
+    ])
+
+    duration_ms = round((time.perf_counter() - start_perf) * 1000, 2)
+    usage = normalize_usage(result)
+    actual_model = getattr(result, "response_metadata", {}).get("model_name", model_name)
+    raw_html = stringify_message_content(result.content)
+
+    return SandboxGenerateResponse(
+        html=raw_html,
+        model_name=actual_model,
+        input_tokens=usage.get("input_tokens"),
+        output_tokens=usage.get("output_tokens"),
+        total_tokens=usage.get("total_tokens"),
+        duration_ms=duration_ms,
+    )
+
+
 @app.get("/api/observability/requests", response_model=list[ApiRequestEvent])
 def list_api_requests(limit: int = 50) -> list[ApiRequestEvent]:
     return load_request_events()[:limit]

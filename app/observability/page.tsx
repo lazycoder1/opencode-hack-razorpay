@@ -95,20 +95,19 @@ export default function ObservabilityPage() {
           <div className="brandIcon">OB</div>
           <div className="brandBlock">
             <strong className="brandTitle">Observability</strong>
-            <span className="brandCaption">Runs, prompts, and latency</span>
+            <span className="brandCaption">Runs, timings, prompts, and request latency</span>
           </div>
         </div>
 
         <div className="navCluster">
           <Link className="navLink" href="/">
-            Create
+            New batch
           </Link>
-          <Link className="navLink" href="/microsites">
-            Microsites
-          </Link>
-          <Link className="navLink" href="/prompts">
-            Prompt Library
-          </Link>
+          {selectedRun?.microsite_slug ? (
+            <Link className="navLink" href={`/microsites/${selectedRun.microsite_slug}`}>
+              Open output
+            </Link>
+          ) : null}
         </div>
       </nav>
 

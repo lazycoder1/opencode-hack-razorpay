@@ -1,5 +1,245 @@
 [
   {
+    "id": "78970798ca314b9abba077ef8e02c05e",
+    "path": "/api/company-profiles",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 0.85,
+    "occurred_at": "2026-04-19T07:37:17.813852+00:00"
+  },
+  {
+    "id": "a74c414a99ed4b27b25dca77d04f6f5e",
+    "path": "/api/company-profiles",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 2.29,
+    "occurred_at": "2026-04-19T07:37:17.809901+00:00"
+  },
+  {
+    "id": "8ad49279e42a4e9ebc2c1d7f77067c18",
+    "path": "/api/sandbox/generate",
+    "method": "OPTIONS",
+    "status_code": 200,
+    "duration_ms": 0.25,
+    "occurred_at": "2026-04-19T07:36:35.445339+00:00"
+  },
+  {
+    "id": "a1fd8f0574aa470d83dc0d16ed5d3c3f",
+    "path": "/api/sandbox/generate",
+    "method": "POST",
+    "status_code": 200,
+    "duration_ms": 2064.16,
+    "occurred_at": "2026-04-19T07:36:21.554056+00:00"
+  },
+  {
+    "id": "17562087449a4fd8a87fdd7499e9fbcd",
+    "path": "/api/health",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 2.06,
+    "occurred_at": "2026-04-19T07:33:03.099225+00:00"
+  },
+  {
+    "id": "bb739b5784784c429ecfe05fb3823d43",
+    "path": "/api/health",
+    "method": "HEAD",
+    "status_code": 405,
+    "duration_ms": 0.53,
+    "occurred_at": "2026-04-19T07:32:56.957810+00:00"
+  },
+  {
+    "id": "2e1d2df8338b4bdfae790d119cbcc785",
+    "path": "/api/company-profiles",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.78,
+    "occurred_at": "2026-04-19T07:30:36.871753+00:00"
+  },
+  {
+    "id": "3d18070a4c2e44c4864e88ea3faa723f",
+    "path": "/api/microsites",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 0.99,
+    "occurred_at": "2026-04-19T07:30:31.746421+00:00"
+  },
+  {
+    "id": "bfaf2c2c40fe40a7a597d9abca397197",
+    "path": "/api/microsites",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.14,
+    "occurred_at": "2026-04-19T07:30:31.743385+00:00"
+  },
+  {
+    "id": "7c365f94638946e8a3f234ad9518758d",
+    "path": "/api/microsites/by-slug/juniper-health-366a7b",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.0,
+    "occurred_at": "2026-04-19T07:22:08.629157+00:00"
+  },
+  {
+    "id": "aa9713ef6cab4f7a832f862a3f9b7bb8",
+    "path": "/api/microsites/by-slug/juniper-health-366a7b",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.28,
+    "occurred_at": "2026-04-19T07:22:08.626479+00:00"
+  },
+  {
+    "id": "e728240e170b43a9866e48f80c47cd9e",
+    "path": "/api/microsites",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.27,
+    "occurred_at": "2026-04-19T07:21:24.635997+00:00"
+  },
+  {
+    "id": "b45a2ce21f5643a7bbf279d3134eb4c3",
+    "path": "/api/microsites",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 0.92,
+    "occurred_at": "2026-04-19T07:21:21.920817+00:00"
+  },
+  {
+    "id": "88ee4a941dc2422fa5a1503adfc4ab28",
+    "path": "/api/microsites",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.25,
+    "occurred_at": "2026-04-19T07:21:21.917772+00:00"
+  },
+  {
+    "id": "39ff28473c87406f9cfeed5207efcd39",
+    "path": "/api/microsites/by-slug/cred-8f35db",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 0.98,
+    "occurred_at": "2026-04-19T07:19:42.278299+00:00"
+  },
+  {
+    "id": "8a81028525094e1c95302be216be7890",
+    "path": "/api/microsites/generate-batch",
+    "method": "POST",
+    "status_code": 200,
+    "duration_ms": 4402.31,
+    "occurred_at": "2026-04-19T07:19:27.188770+00:00"
+  },
+  {
+    "id": "4f6eda088ef44250a4c7ae2f765ec20f",
+    "path": "/api/company-profiles",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 2.88,
+    "occurred_at": "2026-04-19T07:19:27.211074+00:00"
+  },
+  {
+    "id": "38d73602de3b4f689b3605ae32a83cd1",
+    "path": "/api/health",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 10.27,
+    "occurred_at": "2026-04-19T07:19:27.188995+00:00"
+  },
+  {
+    "id": "2b2135d4197545a0b00cff1fa17f317f",
+    "path": "/api/observability/runs",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 3.06,
+    "occurred_at": "2026-04-19T07:19:16.435821+00:00"
+  },
+  {
+    "id": "3d69740911f842fa973a18d01045c9d4",
+    "path": "/api/observability/requests",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 2.01,
+    "occurred_at": "2026-04-19T07:19:16.436188+00:00"
+  },
+  {
+    "id": "e6fc15f5c8c64d5db838419dce967ae3",
+    "path": "/api/observability/requests",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.14,
+    "occurred_at": "2026-04-19T07:10:08.450465+00:00"
+  },
+  {
+    "id": "c190ffa65f1245578c69fb23d41fa97c",
+    "path": "/api/observability/runs",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.01,
+    "occurred_at": "2026-04-19T07:10:08.438578+00:00"
+  },
+  {
+    "id": "9ba6e4b908cc45b8adc722f40ab4bf80",
+    "path": "/api/health",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.28,
+    "occurred_at": "2026-04-19T07:10:08.425899+00:00"
+  },
+  {
+    "id": "284bbfa9bad74a62841dcca027e121a8",
+    "path": "/api/prompts/836e3b2f2b554b6381d0cfca2260696f",
+    "method": "DELETE",
+    "status_code": 200,
+    "duration_ms": 1.33,
+    "occurred_at": "2026-04-19T07:10:01.471703+00:00"
+  },
+  {
+    "id": "31ca418e3d6e47a3ba44e1ab5d2d2c3a",
+    "path": "/api/prompts",
+    "method": "POST",
+    "status_code": 201,
+    "duration_ms": 1.66,
+    "occurred_at": "2026-04-19T07:09:55.819061+00:00"
+  },
+  {
+    "id": "c829b3c67ea94851b3874212510d2e3d",
+    "path": "/api/observability/requests",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 0.92,
+    "occurred_at": "2026-04-19T07:09:44.537087+00:00"
+  },
+  {
+    "id": "2546723a14ab41e39fbb9ef32a5fe88e",
+    "path": "/api/observability/runs",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 0.98,
+    "occurred_at": "2026-04-19T07:09:44.507908+00:00"
+  },
+  {
+    "id": "e22788c9f7004012b6751211c9a6a3b1",
+    "path": "/api/health",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 0.98,
+    "occurred_at": "2026-04-19T07:09:44.482259+00:00"
+  },
+  {
+    "id": "fb47fe28fa6148a4928e20bca4e61dbb",
+    "path": "/api/health",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 2.54,
+    "occurred_at": "2026-04-19T07:09:43.865611+00:00"
+  },
+  {
+    "id": "cd4700a849404b59b870a2a3c5dc5ecb",
+    "path": "/api/prompts",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.78,
+    "occurred_at": "2026-04-19T07:09:43.865364+00:00"
+  },
+  {
     "id": "60e653f131e9456c823a9bb325a103e1",
     "path": "/api/microsites/by-slug/blue-atlas-energy-7ab844",
     "method": "GET",

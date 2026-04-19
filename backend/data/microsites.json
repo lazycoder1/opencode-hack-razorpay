@@ -1,8 +1,60 @@
 [
   {
+    "id": "55d42755df8645fcaf9393dc66acbcf0",
+    "company_name": "CRED",
+    "slug": "cred-8f35db",
+    "source_company_id": "razorpay",
+    "source_company_name": "Razorpay",
+    "source_company_website": "https://razorpay.com",
+    "source_company_logo_path": "/company-assets/razorpay-mark.svg",
+    "tagline": "Confident fintech storytelling for a brand built on speed and trust",
+    "headline": "Make every payment moment feel precise, reliable, and premium",
+    "summary": "A clean first-touch microsite concept for CRED that frames the brand around clarity, trust, and high-quality user experience\u2014without overreaching into unverified claims. Designed to open a conversation about what converts, what reassures, and what deserves sharper product storytelling.",
+    "cta_label": "Explore the story",
+    "visual_direction": "Use a Razorpay-style blue-led layout with strong whitespace, modular cards, and crisp product-like surfaces; pair bold typography with subtle motion and trust cues to make the page feel premium, fast, and unmistakably fintech.",
+    "generated_at": "2026-04-19T07:19:31.589396+00:00",
+    "generation_run_id": "b8e6505efa6942ac93c3a445ac8f3084",
+    "model_name": "gpt-5.4-mini-2026-03-17",
+    "theme": {
+      "background": "#EEF5FF",
+      "surface": "#F8FBFF",
+      "accent": "#2B6EF5",
+      "accent_soft": "#DCE8FF",
+      "text": "#13203D",
+      "muted": "#5A6B8F"
+    },
+    "stats": [
+      "3 discovery angles to sharpen CRED\u2019s first-touch narrative",
+      "1 premium microsite concept built for fast stakeholder review",
+      "0 invented claims\u2014copy stays credible and upgrade-ready"
+    ],
+    "sections": [
+      {
+        "title": "Why this page",
+        "body": "CRED already signals premium intent. This microsite helps translate that intent into a clear first impression: what the product feels like, why it earns trust, and how the experience stays memorable without adding clutter."
+      },
+      {
+        "title": "What we\u2019d highlight",
+        "body": "Focus on the moments users notice most\u2014speed, confidence, and simplicity. The structure can surface product clarity, merchant or member reassurance, and a strong visual rhythm that supports conversion-oriented storytelling."
+      },
+      {
+        "title": "How it can be used",
+        "body": "Treat this as a lightweight outbound asset for early conversations. It\u2019s designed to spark a sharper discovery process, validate messaging direction, and give stakeholders something polished to react to quickly."
+      },
+      {
+        "title": "What it avoids",
+        "body": "No speculative pain points, no unverified internal priorities, and no inflated claims. The copy stays close to observable fintech value: trust, usability, and a premium product experience."
+      }
+    ]
+  },
+  {
     "id": "f3fa88cd915c4b7382c43a2f5055e096",
     "company_name": "Northstar Logistics",
     "slug": "northstar-logistics-6476f0",
+    "source_company_id": "enmovil",
+    "source_company_name": "Enmovil",
+    "source_company_website": "https://enmovil.ai",
+    "source_company_logo_path": "/company-assets/enmovil-mark.svg",
     "tagline": "Navigating Tomorrow's Logistics, Today.",
     "headline": "Empowering Northstar Logistics to Reach New Heights",
     "summary": "Discover tailored solutions designed to streamline operations, enhance efficiency, and drive growth for Northstar Logistics.",
@@ -47,6 +99,10 @@
     "id": "c96ec62d8f9d4a8cbf53e396d1c9b309",
     "company_name": "Acme Capital",
     "slug": "acme-capital-f45973",
+    "source_company_id": "enmovil",
+    "source_company_name": "Enmovil",
+    "source_company_website": "https://enmovil.ai",
+    "source_company_logo_path": "/company-assets/enmovil-mark.svg",
     "tagline": "Empowering Acme Capital's Next Leap Forward",
     "headline": "Unlock New Growth Opportunities with Tailored Insights",
     "summary": "At [Your Company], we specialize in delivering actionable strategies that align with Acme Capital's commitment to innovation and growth. Explore how data-driven solutions can enhance your investment outcomes.",
@@ -91,6 +147,10 @@
     "id": "b64f0c8a3e854e7ba9710793f414d318",
     "company_name": "Juniper Health",
     "slug": "juniper-health-366a7b",
+    "source_company_id": "enmovil",
+    "source_company_name": "Enmovil",
+    "source_company_website": "https://enmovil.ai",
+    "source_company_logo_path": "/company-assets/enmovil-mark.svg",
     "tagline": "Empowering Healthcare Innovation",
     "headline": "Transforming Patient Care with Juniper Health",
     "summary": "Discover how Juniper Health is shaping the future of healthcare delivery through innovative technologies and patient-centric solutions.",
@@ -135,6 +195,10 @@
     "id": "5478009f1a5449f8a1ec8398100ba3d5",
     "company_name": "Blue Atlas Energy",
     "slug": "blue-atlas-energy-7ab844",
+    "source_company_id": "enmovil",
+    "source_company_name": "Enmovil",
+    "source_company_website": "https://enmovil.ai",
+    "source_company_logo_path": "/company-assets/enmovil-mark.svg",
     "tagline": "Empowering Energy Insights for Tomorrow",
     "headline": "Unlocking Potential in Energy Management with Blue Atlas Energy",
     "summary": "Explore innovative solutions to streamline energy operations, enhance data clarity, and support sustainable growth at Blue Atlas Energy. Our approach aligns with your commitment to efficient and responsible energy management.",
@@ -179,6 +243,10 @@
     "id": "47ef204c4461494e81db509d877a66ff",
     "company_name": "Helios Freight",
     "slug": "helios-freight-005fc5",
+    "source_company_id": "enmovil",
+    "source_company_name": "Enmovil",
+    "source_company_website": "https://enmovil.ai",
+    "source_company_logo_path": "/company-assets/enmovil-mark.svg",
     "tagline": "Empowering Freight Forwarding with Insight",
     "headline": "Helios Freight: Navigating Tomorrow's Logistics Challenges Today",
     "summary": "Discover tailored solutions to streamline operations, enhance visibility, and drive efficiency in freight forwarding with Helios Freight. Let's explore opportunities to elevate your logistics performance together.",
@@ -223,6 +291,10 @@
     "id": "eb2acda51a5f458ba8d30e9e25685393",
     "company_name": "Northstar Logistics",
     "slug": "northstar-logistics-0a7291",
+    "source_company_id": "enmovil",
+    "source_company_name": "Enmovil",
+    "source_company_website": "https://enmovil.ai",
+    "source_company_logo_path": "/company-assets/enmovil-mark.svg",
     "tagline": "Manual prospect to graphical microsite",
     "headline": "Northstar Logistics, reframed as a live microsite",
     "summary": "A lightweight account page for Northstar Logistics that gives your team a visual starting point today. This is intentionally barebones and ready for research-driven upgrades later.",
@@ -263,6 +335,10 @@
     "id": "5951a9484772463cb71abaa45c7a8768",
     "company_name": "Acme Capital",
     "slug": "acme-capital-ad9212",
+    "source_company_id": "enmovil",
+    "source_company_name": "Enmovil",
+    "source_company_website": "https://enmovil.ai",
+    "source_company_logo_path": "/company-assets/enmovil-mark.svg",
     "tagline": "Manual prospect to graphical microsite",
     "headline": "Acme Capital, reframed as a live microsite",
     "summary": "A lightweight account page for Acme Capital that gives your team a visual starting point today. This is intentionally barebones and ready for research-driven upgrades later.",

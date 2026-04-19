@@ -123,7 +123,7 @@ export default function MicrositeDetailPage() {
           <img alt={microsite.source_company_name} className="brandLogo" src={microsite.source_company_logo_path} />
           <div className="brandBlock">
             <strong className="brandTitle">{microsite.company_name}</strong>
-            <span className="brandCaption">Built using {microsite.source_company_name} brand system</span>
+            <span className="brandCaption">Built with {microsite.source_company_name} context and brand inputs</span>
           </div>
         </div>
 
@@ -131,12 +131,9 @@ export default function MicrositeDetailPage() {
           <Link className="navLink" href="/microsites">
             Library
           </Link>
-          <Link className="navLink" href="/prompts">
-            Prompt Library
-          </Link>
           {microsite.generation_run_id ? (
             <Link className="navLink" href="/observability">
-              Observability
+              View run
             </Link>
           ) : null}
         </div>

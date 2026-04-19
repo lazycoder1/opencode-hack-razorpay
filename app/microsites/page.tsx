@@ -52,20 +52,19 @@ export default function MicrositesPage() {
           <div className="brandIcon">LB</div>
           <div className="brandBlock">
             <strong className="brandTitle">Microsite Library</strong>
-            <span className="brandCaption">Persisted route index</span>
+            <span className="brandCaption">Persisted routes and preview state</span>
           </div>
         </div>
 
         <div className="navCluster">
           <Link className="navLink" href="/">
-            Create
+            New batch
           </Link>
-          <Link className="navLink" href="/prompts">
-            Prompt Library
-          </Link>
-          <Link className="navLink" href="/observability">
-            Observability
-          </Link>
+          {selectedMicrosite ? (
+            <Link className="navLink" href={`/microsites/${selectedMicrosite.slug}`}>
+              Open selected
+            </Link>
+          ) : null}
         </div>
       </nav>
 
