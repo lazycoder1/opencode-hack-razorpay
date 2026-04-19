@@ -16,6 +16,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -455,6 +456,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static assets (logos etc.) so /m/{slug} HTML can reference /company-assets/*
+_public_dir = BASE_DIR.parent / "public" / "company-assets"
+if _public_dir.is_dir():
+    app.mount("/company-assets", StaticFiles(directory=str(_public_dir)), name="company-assets")
 
 
 def utc_now_iso() -> str:
