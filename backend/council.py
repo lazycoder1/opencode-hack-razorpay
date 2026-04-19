@@ -203,10 +203,13 @@ def get_tavily_client() -> Any:
     return TavilyClient(api_key=api_key)
 
 
-def tavily_search(query: str, max_results: int = 4) -> list[dict[str, Any]]:
+def tavily_search(query: str, max_results: int = 4, include_domains: list[str] | None = None) -> list[dict[str, Any]]:
     try:
         client = get_tavily_client()
-        response = client.search(query=query, max_results=max_results, search_depth="basic")
+        kwargs: dict[str, Any] = {"query": query, "max_results": max_results, "search_depth": "basic"}
+        if include_domains:
+            kwargs["include_domains"] = include_domains
+        response = client.search(**kwargs)
         return response.get("results", []) or []
     except Exception:
         logger.exception("Tavily search failed: %s", query)
@@ -225,12 +228,16 @@ def tavily_extract(urls: list[str]) -> list[dict[str, Any]]:
         return []
 
 
-def run_parallel_searches(queries: list[str], per_query_results: int = 4) -> dict[str, list[dict[str, Any]]]:
+def run_parallel_searches(
+    queries: list[str],
+    per_query_results: int = 4,
+    include_domains: list[str] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
     if not queries:
         return {}
     out: dict[str, list[dict[str, Any]]] = {}
     with ThreadPoolExecutor(max_workers=min(6, len(queries))) as pool:
-        futures = {pool.submit(tavily_search, q, per_query_results): q for q in queries}
+        futures = {pool.submit(tavily_search, q, per_query_results, include_domains): q for q in queries}
         for future, query in futures.items():
             try:
                 out[query] = future.result(timeout=30)
@@ -240,7 +247,12 @@ def run_parallel_searches(queries: list[str], per_query_results: int = 4) -> dic
     return out
 
 
-def format_tavily_context(extract_results: list[dict[str, Any]], search_results: dict[str, list[dict[str, Any]]], max_chars_per_extract: int = 2000) -> str:
+def format_tavily_context(
+    extract_results: list[dict[str, Any]],
+    search_results: dict[str, list[dict[str, Any]]],
+    max_chars_per_extract: int = 2000,
+    reddit_results: dict[str, list[dict[str, Any]]] | None = None,
+) -> str:
     """Turn Tavily results into a source-rich text block suitable for a user prompt."""
     blocks: list[str] = []
     for item in extract_results:
@@ -255,6 +267,19 @@ def format_tavily_context(extract_results: list[dict[str, Any]], search_results:
             content = r.get("content", "")
             date = r.get("published_date", "")
             blocks.append(f"[SEARCH — {query}]\n{title} ({url} — {date})\n{content}")
+    # Reddit results get their own labeled section so the LLM knows the source type
+    if reddit_results:
+        reddit_blocks: list[str] = []
+        for query, results in reddit_results.items():
+            for r in results:
+                title = r.get("title", "")
+                url = r.get("url", "")
+                content = r.get("content", "")
+                date = r.get("published_date", "")
+                reddit_blocks.append(f"[REDDIT — {query}]\n{title} ({url} — {date})\n{content}")
+        if reddit_blocks:
+            blocks.append("===== REDDIT / COMMUNITY SIGNALS =====")
+            blocks.extend(reddit_blocks)
     return "\n\n---\n\n".join(blocks) if blocks else "(no sources returned)"
 
 
@@ -361,15 +386,22 @@ DEFAULT_PROMPTS: dict[str, dict[str, str]] = {
     },
     "prospect_research": {
         "system": _skill_or_inline("prospect-researcher",
-            "You are the Prospect Research Agent. Use ONLY the provided web context to emit a grounded brief."
+            "You are the Prospect Research Agent. Use ONLY the provided web context to emit a grounded brief. "
+            "Pay special attention to Reddit and community sources — they often contain candid user/employee sentiment, "
+            "real pain points, and unfiltered opinions that corporate pages won't reveal. "
+            "When citing Reddit, note the subreddit, approximate date, and whether it's a user, employee, or industry observer."
         ),
         "user": (
             "Research this company as the PROSPECT being pitched to. Use ONLY the web context below. Every claim must trace to a source URL.\n\n"
             "Prospect: {{prospect}}\n"
             "Being pitched by: {{source_company}}\n"
             "Manager's plan:\n{{generation_plan}}\n\n"
-            "----- WEB CONTEXT (Tavily homepage extract + parallel searches) -----\n{{tavily_web_data}}\n\n"
-            "Organize with headers: Summary, Industry, Pain Points By Segment/Scale (each with source_url), General Trends In Solving These Pains, Recent Signals (with source + date), Leadership Priorities, Funding Stage, Tech Signals, Relevant Triggers, CIO Considerations, CFO Considerations, Champion Considerations, Gaps Detected, Unverified Enrichment (clearly labeled). "
+            "----- WEB CONTEXT (Tavily homepage extract + parallel searches + Reddit community signals) -----\n{{tavily_web_data}}\n\n"
+            "Organize with headers: Summary, Industry, Pain Points By Segment/Scale (each with source_url), "
+            "Reddit & Community Signals (candid user/employee sentiment, complaints, praise — with source_url and subreddit), "
+            "General Trends In Solving These Pains, Recent Signals (with source + date), Leadership Priorities, Funding Stage, "
+            "Tech Signals, Relevant Triggers, CIO Considerations, CFO Considerations, Champion Considerations, Gaps Detected, "
+            "Unverified Enrichment (clearly labeled). "
             "Drop any claim you cannot cite — do not paper over with generalities."
         ),
     },
@@ -805,6 +837,7 @@ def _tavily_prospect_context(state: CouncilState) -> tuple[str, dict[str, Any]]:
 
     if is_followup and followups:
         queries = followups[:5]
+        reddit_queries: list[str] = []
     else:
         queries = [
             f'"{prospect_name}" company overview business model',
@@ -813,11 +846,26 @@ def _tavily_prospect_context(state: CouncilState) -> tuple[str, dict[str, Any]]:
             f'"{prospect_name}" leadership OR CEO OR CTO priorities',
             f'"{prospect_name}" technology stack OR infrastructure',
         ]
+        # Reddit-specific queries for candid user/employee sentiment
+        reddit_queries = [
+            f'{prospect_name} pain points OR frustrations OR complaints',
+            f'{prospect_name} review OR experience OR problems',
+            f'{prospect_name} engineering OR tech stack OR infrastructure',
+        ]
+
+    # Run general web search and Reddit search in parallel
     search = run_parallel_searches(queries, per_query_results=4)
-    text = format_tavily_context(extracts, search)
+    reddit_search: dict[str, list[dict[str, Any]]] = {}
+    if reddit_queries:
+        reddit_search = run_parallel_searches(reddit_queries, per_query_results=3, include_domains=["reddit.com"])
+
+    text = format_tavily_context(extracts, search, reddit_results=reddit_search)
+    total_reddit_results = sum(len(v) for v in reddit_search.values())
     metadata = {
         "pages_extracted": len(extracts),
-        "queries_run": len(queries),
+        "queries_run": len(queries) + len(reddit_queries),
+        "reddit_queries_run": len(reddit_queries),
+        "reddit_results_found": total_reddit_results,
         "is_followup": is_followup,
         "followups_used": followups if is_followup else [],
     }
