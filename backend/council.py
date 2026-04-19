@@ -364,7 +364,7 @@ DEFAULT_PROMPTS: dict[str, dict[str, str]] = {
             "Being pitched by: {{source_company}}\n"
             "Manager's plan:\n{{generation_plan}}\n\n"
             "----- WEB CONTEXT (Tavily homepage extract + parallel searches) -----\n{{tavily_web_data}}\n\n"
-            "Organize with headers: Summary, Industry, Pain Points (each with source_url), Recent Signals (with source + date), Leadership Priorities, Funding Stage, Tech Signals, Relevant Triggers, Gaps Detected, Unverified Enrichment (clearly labeled). "
+            "Organize with headers: Summary, Industry, Pain Points By Segment/Scale (each with source_url), General Trends In Solving These Pains, Recent Signals (with source + date), Leadership Priorities, Funding Stage, Tech Signals, Relevant Triggers, CIO Considerations, CFO Considerations, Champion Considerations, Gaps Detected, Unverified Enrichment (clearly labeled). "
             "Drop any claim you cannot cite — do not paper over with generalities."
         ),
     },
@@ -412,14 +412,16 @@ DEFAULT_PROMPTS: dict[str, dict[str, str]] = {
         ),
         "user": (
             "Create a sales microsite for {{source_company}} selling to {{company_name}}.\n\n"
-            "Include a hero with the 5-line narrative hook verbatim, 3 stats, 3-4 editorial sections, a CTA, and a footer.\n"
+            "Include a hero with the 5-line narrative hook verbatim, 3 stats, 3-4 editorial sections, role-specific discovery sections for CIO/CFO/Champion, a CTA, and a footer.\n"
             "Make it feel premium and brand-appropriate (see seller brand context).\n\n"
             "--- SELLER BRAND ---\n{{seller_brand}}\n\n"
             "--- SELLER SKILLS ---\n{{seller_skills}}\n\n"
             "--- NARRATIVE BRIEF (structured, from the editor) ---\n{{narrative_brief_json}}\n\n"
             "--- SELLER RESEARCH ---\n{{seller_research}}\n\n"
             "--- PROSPECT RESEARCH ---\n{{prospect_research}}\n\n"
+            "--- INDUSTRY RESEARCH ---\n{{industry_research}}\n\n"
             "--- MANAGER REVIEW NOTES ---\n{{review_notes}}\n\n"
+            "Also create role-specific discovery content for CIO, CFO, and Champion stakeholders inside the structured output."
             "Do NOT invent facts not in the research or brief. "
             "The prospect name '{{prospect}}' must appear at least 3 times on the page. "
             "Return ONLY the raw HTML — no markdown fences."
@@ -542,6 +544,21 @@ class MicrositeContent(BaseModel):
     stats: list[str] = Field(min_length=3, max_length=3)
     sections: list[_MicrositeSection] = Field(min_length=3, max_length=4)
     theme: _MicrositeTheme
+    role_pages: RolePages
+
+
+class RolePage(BaseModel):
+    title: str
+    summary: str
+    priorities: list[str] = Field(min_length=3, max_length=5)
+    sections: list[_MicrositeSection] = Field(min_length=2, max_length=4)
+    cta: str
+
+
+class RolePages(BaseModel):
+    cio: RolePage
+    cfo: RolePage
+    champion: RolePage
 
 
 # ---------------------------------------------------------------------------
@@ -575,6 +592,7 @@ class CouncilRunResult(BaseModel):
     steps: list[AgentStepResult]
     seller_research: str
     prospect_research: str
+    industry_research: str = ""
     generation_plan: str
     review_notes: str
     final_html: str
@@ -582,6 +600,7 @@ class CouncilRunResult(BaseModel):
     prospect_seller_fit: dict[str, Any] | None = None
     narrative_brief: dict[str, Any] | None = None
     microsite_content: dict[str, Any] | None = None
+    role_pages: dict[str, Any] | None = None
     iterations: int = 1
     used_mcp: bool = False
 
@@ -594,6 +613,8 @@ class StagePrompts(BaseModel):
     seller_research_user: str = ""
     prospect_research_system: str = ""
     prospect_research_user: str = ""
+    industry_research_system: str = ""
+    industry_research_user: str = ""
     manager_review_system: str = ""
     manager_review_user: str = ""
     generator_system: str = ""
@@ -630,6 +651,7 @@ class CouncilState(TypedDict, total=False):
     generation_plan: str
     seller_research: str
     prospect_research: str
+    industry_research: str
     review_notes: str
     approved: bool
     verdict: str
@@ -639,6 +661,7 @@ class CouncilState(TypedDict, total=False):
     prospect_seller_fit: dict[str, Any]
     narrative_brief: dict[str, Any]
     microsite_content: dict[str, Any]
+    role_pages: dict[str, Any]
 
     # Dynamic looping
     iteration_count: int
@@ -659,6 +682,15 @@ def _get_prompt(state: CouncilState, stage: str, key: str) -> str:
     custom = (state.get("prompts") or {}).get(stage, {}).get(key, "")
     if custom and custom.strip():
         return custom
+    try:
+        from . import db as pgdb
+    except ImportError:
+        import db as pgdb
+    record = pgdb.get_active_council_prompt(state.get("source_company", ""), stage)
+    if record:
+        prompt_value = record.get("system_prompt", "") if key == "system" else record.get("user_prompt", "")
+        if isinstance(prompt_value, str) and prompt_value.strip():
+            return prompt_value
     return DEFAULT_PROMPTS.get(stage, {}).get(key, "")
 
 
@@ -675,6 +707,7 @@ def _render(template: str, state: CouncilState) -> str:
         .replace("{{generation_plan}}", state.get("generation_plan", "No plan provided."))
         .replace("{{seller_research}}", state.get("seller_research", "No seller research available."))
         .replace("{{prospect_research}}", state.get("prospect_research", "No prospect research available."))
+        .replace("{{industry_research}}", state.get("industry_research", "No industry research available."))
         .replace("{{review_notes}}", state.get("review_notes", "No review notes."))
         .replace("{{tavily_web_data}}", state.get("tavily_web_data", "(no web data)"))
         .replace("{{tavily_seller_data}}", state.get("tavily_seller_data", "(no web data)"))
@@ -796,6 +829,17 @@ def prospect_research_node(state: CouncilState) -> CouncilState:
     )
     updates["tavily_web_data"] = tavily_text
     return updates
+
+
+def industry_research_node(state: CouncilState) -> CouncilState:
+    return _run_llm_node(
+        state,
+        stage="industry_research",
+        agent_role="industry_researcher",
+        temperature=0.3,
+        output_key="industry_research",
+        extra_metadata={"prospect": state["prospect"]},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1247,11 +1291,14 @@ def generate_microsite_node(state: CouncilState) -> CouncilState:
         f"Seller: {state['source_company']} (slug: {seller_slug})\n"
         f"Prospect: {state['prospect']}\n\n"
         "Produce MicrositeContent with all fields. narrative_hook MUST be the 5 hook lines verbatim from the brief. "
-        "stats must trace to the brief or research. Never fabricate percentages.\n\n"
+        "stats must trace to the brief or research. Never fabricate percentages. "
+        "role_pages must contain tailored sections for CIO, CFO, and Champion stakeholders within the SAME microsite. "
+        "CIO should emphasize compliance, security, architecture, risk, and implementation fit. CFO should emphasize ROI framing, cost control, payback logic, and measurable outcomes. Champion should emphasize workflow pain, speed-to-win, adoption, and internal buy-in.\n\n"
         f"----- NARRATIVE BRIEF -----\n{_json.dumps(state.get('narrative_brief') or {}, indent=2)}\n\n"
         f"----- SELLER BRAND -----\n{brand_md or '(none)'}\n\n"
         f"----- SELLER SKILLS -----\n{skills_md or '(none)'}\n\n"
         f"----- PROSPECT RESEARCH -----\n{state.get('prospect_research', '')}\n\n"
+        f"----- INDUSTRY RESEARCH -----\n{state.get('industry_research', '')}\n\n"
         f"----- SELLER RESEARCH -----\n{state.get('seller_research', '')}"
     )
     structured_content: MicrositeContent | None = None
@@ -1322,6 +1369,7 @@ def generate_microsite_node(state: CouncilState) -> CouncilState:
     updates: dict[str, Any] = {
         "final_html": html,
         "microsite_content": structured_content.model_dump() if structured_content else None,
+        "role_pages": structured_content.role_pages.model_dump() if structured_content else None,
         "steps": [*state.get("steps", []), step.model_dump()],
     }
     if not html and not structured_content:
@@ -1449,6 +1497,8 @@ def run_council(
             prompts["seller_research"] = {"system": sp.seller_research_system, "user": sp.seller_research_user}
         if sp.prospect_research_system or sp.prospect_research_user:
             prompts["prospect_research"] = {"system": sp.prospect_research_system, "user": sp.prospect_research_user}
+        if sp.industry_research_system or sp.industry_research_user:
+            prompts["industry_research"] = {"system": sp.industry_research_system, "user": sp.industry_research_user}
         if sp.manager_review_system or sp.manager_review_user:
             prompts["manager_review"] = {"system": sp.manager_review_system, "user": sp.manager_review_user}
         if sp.generator_system or sp.generator_user:

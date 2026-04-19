@@ -1904,12 +1904,51 @@ class CouncilRunRequest(BaseModel):
 
 
 class SingleStageRequest(BaseModel):
-    stage: str = Field(description="One of: manager_plan, seller_research, prospect_research, manager_review, generate_microsite")
+    stage: str = Field(description="One of: manager_plan, seller_research, prospect_research, prospect_seller_fit, manager_review, generate_microsite")
     prospect: str
     source_company: str
     system_prompt: str = Field(default="", description="System prompt override for this stage")
     user_prompt: str = Field(default="", description="User prompt override for this stage")
     context: dict[str, str] = Field(default_factory=dict, description="Outputs from previous stages")
+
+
+class CouncilPromptRecord(BaseModel):
+    id: str
+    tenant_key: str
+    stage: str
+    name: str
+    system_prompt: str
+    user_prompt: str
+    is_active: bool
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class CouncilPromptCreateRequest(BaseModel):
+    source_company: str
+    stage: str
+    name: str
+    system_prompt: str = ""
+    user_prompt: str = ""
+
+
+class StageArtifactRecord(BaseModel):
+    id: str
+    run_id: str
+    tenant_key: str
+    stage: str
+    artifact_type: str
+    approval_state: str
+    approval_notes: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class StageApprovalRequest(BaseModel):
+    approval_state: str = Field(description="approved | rejected | pending_review | changes_requested")
+    approval_notes: str = ""
 
 
 @app.on_event("startup")
@@ -1998,6 +2037,30 @@ def council_run(request: CouncilRunRequest) -> CouncilRunResult:
         })
     except Exception:
         logger.exception("Failed to persist council run to Postgres")
+
+    # Persist stage artifacts for approval workflow
+    stage_artifact_map = {
+        "manager_plan": {"output": result.generation_plan},
+        "seller_research": {"output": result.seller_research},
+        "prospect_research": {"output": result.prospect_research},
+        "prospect_seller_fit": {"output": result.prospect_seller_fit} if hasattr(result, "prospect_seller_fit") and result.prospect_seller_fit else {},
+        "manager_review": {"output": result.review_notes, "narrative_brief": result.narrative_brief},
+        "generate_microsite": {"output": result.final_html[:500] if result.final_html else "", "microsite_content": result.microsite_content, "role_pages": result.role_pages},
+    }
+    for stage_name, payload in stage_artifact_map.items():
+        if not payload:
+            continue
+        try:
+            pgdb.save_stage_artifact({
+                "run_id": result.run_id,
+                "source_company": result.source_company,
+                "stage": stage_name,
+                "artifact_type": "stage_output",
+                "approval_state": "pending_review",
+                "payload": payload,
+            })
+        except Exception:
+            logger.exception("Failed to persist stage artifact for %s", stage_name)
 
     # Persist the microsite in two forms so both render surfaces work:
     #   A) pgdb.save_microsite  → raw HTML at /m/{slug}       (demo live URL)
@@ -2196,3 +2259,62 @@ def list_eval_results_endpoint() -> list[dict[str, Any]]:
 @app.get("/api/observability/requests", response_model=list[ApiRequestEvent])
 def list_api_requests(limit: int = 50) -> list[ApiRequestEvent]:
     return load_request_events()[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Council prompt library (tenant-scoped, DB-backed)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/council/prompts/{source_company}")
+def list_council_prompts_for_tenant(source_company: str) -> list[dict[str, Any]]:
+    return pgdb.list_council_prompts(source_company)
+
+
+@app.post("/api/council/prompts", status_code=201)
+def create_council_prompt(request: CouncilPromptCreateRequest) -> dict[str, Any]:
+    from uuid import uuid4 as _uuid4
+    record = {
+        "id": _uuid4().hex,
+        "tenant_key": request.source_company,
+        "stage": request.stage,
+        "name": request.name,
+        "system_prompt": request.system_prompt,
+        "user_prompt": request.user_prompt,
+        "is_active": False,
+        "metadata": {},
+    }
+    pgdb.save_council_prompt(record)
+    return record
+
+
+@app.post("/api/council/prompts/{prompt_id}/activate")
+def activate_council_prompt_endpoint(prompt_id: str, source_company: str = "") -> dict[str, Any]:
+    result = pgdb.activate_council_prompt(source_company, prompt_id)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Prompt '{prompt_id}' not found for tenant")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Stage artifacts and approvals
+# ---------------------------------------------------------------------------
+
+@app.get("/api/council/runs/{run_id}/artifacts")
+def list_run_artifacts(run_id: str) -> list[dict[str, Any]]:
+    return pgdb.list_stage_artifacts(run_id)
+
+
+@app.get("/api/council/runs/{run_id}/artifacts/{stage}")
+def get_run_artifact(run_id: str, stage: str) -> dict[str, Any]:
+    record = pgdb.get_stage_artifact(run_id, stage)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Artifact for stage '{stage}' in run '{run_id}' not found")
+    return record
+
+
+@app.post("/api/council/runs/{run_id}/artifacts/{stage}/approve")
+def approve_stage_artifact(run_id: str, stage: str, request: StageApprovalRequest) -> dict[str, bool]:
+    updated = pgdb.update_stage_approval(run_id, stage, request.approval_state, request.approval_notes)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"No artifact found for stage '{stage}' in run '{run_id}'")
+    return {"updated": True}
