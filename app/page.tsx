@@ -63,6 +63,8 @@ const AGENT_LABELS: Record<string, string> = {
   generator: "Generator",
 };
 
+const MAX_PARALLEL_RUNS = 3;
+
 export default function Home() {
   const [companyProfiles, setCompanyProfiles] = useState<CompanyProfile[]>([]);
   const [sourceCompanyId, setSourceCompanyId] = useState("razorpay");
@@ -82,6 +84,7 @@ export default function Home() {
 
   const completedCount = prospects.filter((p) => p.status === "completed").length;
   const failedCount = prospects.filter((p) => p.status === "failed").length;
+  const runningCount = prospects.filter((p) => p.status === "running").length;
   const totalCost = prospects.reduce((s, p) => s + (p.run?.total_cost_usd ?? 0), 0);
   const totalDuration = prospects.reduce((s, p) => s + (p.run?.total_duration_ms ?? 0), 0);
 
@@ -132,13 +135,12 @@ export default function Home() {
     setProspects(initial);
     setSelectedProspect(null);
 
-    for (let i = 0; i < initial.length; i++) {
-      if (abortRef.current) break;
+    let nextIndex = 0;
 
-      const prospect = initial[i];
+    async function runProspect(index: number) {
+      const prospect = initial[index];
 
-      // Mark as running
-      setProspects((prev) => prev.map((p, idx) => (idx === i ? { ...p, status: "running", currentStep: "manager_plan" } : p)));
+      setProspects((prev) => prev.map((p, idx) => (idx === index ? { ...p, status: "running", currentStep: "manager_plan" } : p)));
 
       try {
         const response = await fetch(`${apiBaseUrl}/api/council/run`, {
@@ -159,23 +161,38 @@ export default function Home() {
 
         setProspects((prev) =>
           prev.map((p, idx) =>
-            idx === i
+            idx === index
               ? { ...p, status: run.status === "completed" ? "completed" : "failed", currentStep: "", run, slug }
               : p,
           ),
         );
 
-        // Auto-select the first completed one
         if (run.status === "completed" && run.final_html) {
-          setSelectedProspect(prospect.name);
+          setSelectedProspect((current) => current ?? prospect.name);
         }
       } catch (caughtError) {
         setProspects((prev) =>
-          prev.map((p, idx) => (idx === i ? { ...p, status: "failed", currentStep: "" } : p)),
+          prev.map((p, idx) => (idx === index ? { ...p, status: "failed", currentStep: "" } : p)),
         );
-        setError(caughtError instanceof Error ? caughtError.message : `Failed for ${prospect.name}`);
+        setError((current) => current || (caughtError instanceof Error ? caughtError.message : `Failed for ${prospect.name}`));
       }
     }
+
+    async function worker() {
+      while (!abortRef.current) {
+        const index = nextIndex;
+        nextIndex += 1;
+
+        if (index >= initial.length) {
+          return;
+        }
+
+        await runProspect(index);
+      }
+    }
+
+    const workerCount = Math.min(MAX_PARALLEL_RUNS, initial.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
     setRunning(false);
   }
@@ -247,7 +264,9 @@ export default function Home() {
               disabled={running || prospectNames.length === 0 || !selectedSourceCompany}
               onClick={runBatch}
             >
-              {running ? `Generating ${completedCount + failedCount + 1} of ${prospects.length}...` : `Generate ${prospectNames.length} microsites`}
+              {running
+                ? `Generating ${completedCount + failedCount}/${prospects.length} complete${runningCount > 0 ? ` · ${runningCount} running` : ""}`
+                : `Generate ${prospectNames.length} microsites`}
             </button>
           </div>
         </div>
