@@ -1,0 +1,130 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #f6f7fb;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #18212f;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.card {
+  width: min(100%, 680px);
+  background: #ffffff;
+  border: 1px solid #dde3ee;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 18px 40px rgba(24, 33, 47, 0.08);
+}
+
+.eyebrow,
+.statusLabel,
+.field span {
+  display: block;
+  margin-bottom: 8px;
+  color: #4d5d73;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+
+.description {
+  margin: 16px 0 0;
+  color: #4d5d73;
+  line-height: 1.6;
+}
+
+.statusRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.statusCard,
+.responseBox {
+  background: #f8faff;
+  border: 1px solid #dde3ee;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.statusCard strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.field input {
+  width: 100%;
+  border: 1px solid #cfd8e6;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.button {
+  width: fit-content;
+  border: none;
+  border-radius: 10px;
+  background: #18212f;
+  color: #ffffff;
+  padding: 12px 18px;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.responseBox {
+  margin-top: 24px;
+}
+
+.responseBox p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.errorText {
+  margin-top: 12px !important;
+  color: #b42318;
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 24px;
+  }
+
+  .statusRow {
+    grid-template-columns: 1fr;
+  }
+}
