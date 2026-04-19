@@ -131,6 +131,7 @@ MIGRATIONS_SQL = [
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS tagline TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS summary TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS council_run_id TEXT",
+    "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()",
     # --- indexes ---
     "CREATE INDEX IF NOT EXISTS idx_council_runs_tenant_created ON council_runs(tenant_key, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_microsites_tenant_created ON microsites(tenant_key, created_at DESC)",
