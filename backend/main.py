@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 
 BASE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BASE_DIR.parent
 DATA_DIR = BASE_DIR / "data"
 MICROSITES_PATH = DATA_DIR / "microsites.json"
 RUNS_PATH = DATA_DIR / "generation_runs.json"
@@ -39,6 +40,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 class GenerateMicrositesRequest(BaseModel):
     prospects: list[str] = Field(default_factory=list)
+    company_profile_id: str = "enmovil"
 
 
 class PromptLibraryItem(BaseModel):
@@ -100,6 +102,10 @@ class MicrositeRecord(BaseModel):
     id: str
     company_name: str
     slug: str
+    source_company_id: str = "enmovil"
+    source_company_name: str = "Enmovil"
+    source_company_website: str = "https://enmovil.ai"
+    source_company_logo_path: str = "/company-assets/enmovil-mark.svg"
     tagline: str
     headline: str
     summary: str
@@ -155,9 +161,25 @@ class ApiRequestEvent(BaseModel):
     occurred_at: str
 
 
+class CompanyProfileRecord(BaseModel):
+    id: str
+    name: str
+    website_url: str
+    logo_path: str
+    wordmark: str
+    summary: str
+    skills: list[str]
+    brand_markdown_path: str
+    skills_markdown_path: str
+    brand_markdown: str
+    skills_markdown: str
+    theme: MicrositeTheme
+
+
 class GenerationState(TypedDict, total=False):
     run_id: str
     company_name: str
+    source_company_profile_id: str
     mcp_context: str
     mcp_server_names: list[str]
     prompt: str
@@ -210,6 +232,45 @@ DEFAULT_PROMPTS = [
         "is_active": True,
     },
 ]
+
+COMPANY_PROFILE_CONFIG = {
+    "enmovil": {
+        "name": "Enmovil",
+        "website_url": "https://enmovil.ai",
+        "logo_path": "/company-assets/enmovil-mark.svg",
+        "wordmark": "enmovil.ai",
+        "summary": "Operational AI design language for logistics, field teams, and execution workflows.",
+        "skills": ["operations storytelling", "ABX microsites", "workflow visibility", "field coordination"],
+        "brand_markdown_path": "company-profiles/enmovil/brand.md",
+        "skills_markdown_path": "company-profiles/enmovil/skills.md",
+        "theme": {
+            "background": "#0B1018",
+            "surface": "#121A24",
+            "accent": "#4DD6BE",
+            "accent_soft": "#173F3A",
+            "text": "#EFF7F4",
+            "muted": "#9FB8B2",
+        },
+    },
+    "razorpay": {
+        "name": "Razorpay",
+        "website_url": "https://razorpay.com",
+        "logo_path": "/company-assets/razorpay-mark.svg",
+        "wordmark": "Razorpay",
+        "summary": "Payments-infrastructure design language with clean blue product surfaces and fintech clarity.",
+        "skills": ["payments positioning", "fintech storytelling", "merchant UX", "trust and conversion"],
+        "brand_markdown_path": "company-profiles/razorpay/brand.md",
+        "skills_markdown_path": "company-profiles/razorpay/skills.md",
+        "theme": {
+            "background": "#EEF5FF",
+            "surface": "#F8FBFF",
+            "accent": "#2B6EF5",
+            "accent_soft": "#DCE8FF",
+            "text": "#13203D",
+            "muted": "#5A6B8F",
+        },
+    },
+}
 
 
 PALETTES = [
@@ -344,6 +405,41 @@ def ensure_default_prompts() -> None:
     save_prompts(seeded)
 
 
+def read_project_markdown(relative_path: str) -> str:
+    path = PROJECT_ROOT / relative_path
+    return path.read_text(encoding="utf-8")
+
+
+def list_company_profiles() -> list[CompanyProfileRecord]:
+    profiles: list[CompanyProfileRecord] = []
+    for profile_id, config in COMPANY_PROFILE_CONFIG.items():
+        profiles.append(
+            CompanyProfileRecord(
+                id=profile_id,
+                name=config["name"],
+                website_url=config["website_url"],
+                logo_path=config["logo_path"],
+                wordmark=config["wordmark"],
+                summary=config["summary"],
+                skills=config["skills"],
+                brand_markdown_path=config["brand_markdown_path"],
+                skills_markdown_path=config["skills_markdown_path"],
+                brand_markdown=read_project_markdown(config["brand_markdown_path"]),
+                skills_markdown=read_project_markdown(config["skills_markdown_path"]),
+                theme=MicrositeTheme(**config["theme"]),
+            )
+        )
+    return profiles
+
+
+def get_company_profile(profile_id: str) -> CompanyProfileRecord:
+    normalized = profile_id.strip().lower()
+    for profile in list_company_profiles():
+        if profile.id == normalized:
+            return profile
+    raise HTTPException(status_code=404, detail=f"Company profile '{profile_id}' was not found")
+
+
 def normalize_prompt_stage(stage: str) -> str:
     normalized = stage.strip().lower().replace(" ", "_")
     if normalized not in PROMPT_STAGES:
@@ -420,9 +516,15 @@ def cleaned_prospects(values: list[str]) -> list[str]:
     return cleaned
 
 
-def pick_palette(company_name: str) -> dict[str, str]:
-    digest = hashlib.sha256(company_name.encode("utf-8")).hexdigest()
-    return PALETTES[int(digest[:2], 16) % len(PALETTES)]
+def get_company_prompt_context(company_profile: CompanyProfileRecord) -> str:
+    skills = ", ".join(company_profile.skills)
+    return (
+        f"Selected source company: {company_profile.name} ({company_profile.website_url}).\n"
+        f"Brand summary: {company_profile.summary}\n"
+        f"Skill emphasis: {skills}\n\n"
+        f"Brand guide:\n{company_profile.brand_markdown.strip()}\n\n"
+        f"Skills guide:\n{company_profile.skills_markdown.strip()}"
+    )
 
 
 def make_step(name: str, started_at: str, start_perf: float, status: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -493,7 +595,11 @@ def get_llm() -> ChatOpenAI:
     return ChatOpenAI(model=get_openai_model_name(), api_key=api_key, temperature=0.9)
 
 
-def build_prompt(company_name: str, mcp_context: str = "") -> tuple[str, PromptLibraryItem]:
+def build_prompt(
+    company_name: str,
+    source_company_profile: CompanyProfileRecord,
+    mcp_context: str = "",
+) -> tuple[str, PromptLibraryItem]:
     prompt_item = get_active_prompt("microsite_generation")
     context_block = ""
     if mcp_context.strip():
@@ -510,14 +616,38 @@ def build_prompt(company_name: str, mcp_context: str = "") -> tuple[str, PromptL
             "company_name": company_name,
             "mcp_context": mcp_context.strip(),
             "mcp_context_block": context_block,
+            "source_company_name": source_company_profile.name,
+            "source_company_website": source_company_profile.website_url,
+            "source_company_context": get_company_prompt_context(source_company_profile),
         },
+    )
+    prompt = (
+        f"{prompt}\n\n"
+        "Source company context:\n"
+        f"{get_company_prompt_context(source_company_profile)}"
     )
     return prompt, prompt_item
 
 
-def build_mcp_research_prompt(company_name: str) -> tuple[str, PromptLibraryItem]:
+def build_mcp_research_prompt(
+    company_name: str,
+    source_company_profile: CompanyProfileRecord,
+) -> tuple[str, PromptLibraryItem]:
     prompt_item = get_active_prompt("mcp_research")
-    prompt = render_prompt_template(prompt_item.content, {"company_name": company_name})
+    prompt = render_prompt_template(
+        prompt_item.content,
+        {
+            "company_name": company_name,
+            "source_company_name": source_company_profile.name,
+            "source_company_website": source_company_profile.website_url,
+            "source_company_context": get_company_prompt_context(source_company_profile),
+        },
+    )
+    prompt = (
+        f"{prompt}\n\n"
+        "Source company context:\n"
+        f"{get_company_prompt_context(source_company_profile)}"
+    )
     return prompt, prompt_item
 
 
@@ -555,7 +685,7 @@ def extract_agent_text(result: Any) -> str:
     return str(result).strip()
 
 
-async def collect_mcp_context(company_name: str) -> dict[str, Any]:
+async def collect_mcp_context(company_name: str, source_company_profile: CompanyProfileRecord) -> dict[str, Any]:
     server_config = get_mcp_servers_config()
     if not server_config:
         return {"context": "", "server_names": [], "tool_names": []}
@@ -569,7 +699,7 @@ async def collect_mcp_context(company_name: str) -> dict[str, Any]:
             "tool_names": [],
         }
 
-    prompt, prompt_item = build_mcp_research_prompt(company_name)
+    prompt, prompt_item = build_mcp_research_prompt(company_name, source_company_profile)
     agent = create_agent(f"openai:{get_openai_model_name()}", tools)
     result = await agent.ainvoke(
         {
@@ -614,7 +744,8 @@ def collect_mcp_context_node(state: GenerationState) -> GenerationState:
     steps = [*state.get("steps", [])]
 
     try:
-        context_payload = run_async_task(collect_mcp_context(state["company_name"]))
+        source_company_profile = get_company_profile(state["source_company_profile_id"])
+        context_payload = run_async_task(collect_mcp_context(state["company_name"], source_company_profile))
         step_status = "completed" if context_payload["context"] else "skipped"
         steps.append(
             make_step(
@@ -627,6 +758,7 @@ def collect_mcp_context_node(state: GenerationState) -> GenerationState:
                     "tool_names": context_payload["tool_names"],
                     "context_chars": len(context_payload["context"]),
                     "prompt_item_name": context_payload.get("prompt_item_name"),
+                    "source_company": source_company_profile.name,
                 },
             )
         )
@@ -650,7 +782,12 @@ def collect_mcp_context_node(state: GenerationState) -> GenerationState:
 def prepare_prompt_node(state: GenerationState) -> GenerationState:
     started_at = utc_now_iso()
     start_perf = time.perf_counter()
-    prompt, prompt_item = build_prompt(state["company_name"], state.get("mcp_context", ""))
+    source_company_profile = get_company_profile(state["source_company_profile_id"])
+    prompt, prompt_item = build_prompt(
+        state["company_name"],
+        source_company_profile,
+        state.get("mcp_context", ""),
+    )
     step = make_step(
         "prepare_prompt",
         started_at,
@@ -658,6 +795,7 @@ def prepare_prompt_node(state: GenerationState) -> GenerationState:
         "completed",
         {
             "company_name": state["company_name"],
+            "source_company": source_company_profile.name,
             "uses_mcp_context": bool(state.get("mcp_context", "").strip()),
             "mcp_server_names": state.get("mcp_server_names", []),
             "prompt_item_name": prompt_item.name,
@@ -730,10 +868,15 @@ def finalize_microsite_node(state: GenerationState) -> GenerationState:
     start_perf = time.perf_counter()
     content = GeneratedMicrositeContent.model_validate(state["generated_content"])
     company_name = state["company_name"]
+    source_company_profile = get_company_profile(state["source_company_profile_id"])
     microsite = MicrositeRecord(
         id=uuid4().hex,
         company_name=company_name,
         slug=f"{slugify(company_name)}-{uuid4().hex[:6]}",
+        source_company_id=source_company_profile.id,
+        source_company_name=source_company_profile.name,
+        source_company_website=source_company_profile.website_url,
+        source_company_logo_path=source_company_profile.logo_path,
         tagline=content.tagline,
         headline=content.headline,
         summary=content.summary,
@@ -742,7 +885,7 @@ def finalize_microsite_node(state: GenerationState) -> GenerationState:
         generated_at=utc_now_iso(),
         generation_run_id=state["run_id"],
         model_name=state.get("model_name"),
-        theme=MicrositeTheme(**pick_palette(company_name)),
+        theme=source_company_profile.theme,
         stats=content.stats,
         sections=content.sections,
     )
@@ -751,7 +894,7 @@ def finalize_microsite_node(state: GenerationState) -> GenerationState:
         started_at,
         start_perf,
         "completed",
-        {"slug": microsite.slug},
+        {"slug": microsite.slug, "source_company": source_company_profile.name},
     )
     return {
         "microsite": microsite.model_dump(),
@@ -780,14 +923,16 @@ def save_generation_run(record: GenerationRunRecord) -> None:
     save_runs(runs[:250])
 
 
-def run_generation(company_name: str) -> tuple[MicrositeRecord | None, GenerationRunRecord]:
+def run_generation(company_name: str, source_company_profile_id: str) -> tuple[MicrositeRecord | None, GenerationRunRecord]:
     started_at = utc_now_iso()
     start_perf = time.perf_counter()
     run_id = uuid4().hex
+    source_company_profile = get_company_profile(source_company_profile_id)
     state = get_generation_graph().invoke(
         {
             "run_id": run_id,
             "company_name": company_name,
+            "source_company_profile_id": source_company_profile.id,
             "steps": [],
         }
     )
@@ -809,7 +954,18 @@ def run_generation(company_name: str) -> tuple[MicrositeRecord | None, Generatio
         llm_duration_ms=state.get("llm_duration_ms"),
         microsite_slug=microsite.slug if microsite else None,
         error=state.get("error"),
-        steps=[RunStep.model_validate(step) for step in state.get("steps", [])],
+        steps=[
+            RunStep.model_validate(
+                {
+                    **step,
+                    "metadata": {
+                        **step.get("metadata", {}),
+                        "source_company": step.get("metadata", {}).get("source_company", source_company_profile.name),
+                    },
+                }
+            )
+            for step in state.get("steps", [])
+        ],
     )
     save_generation_run(run_record)
     return microsite, run_record
@@ -858,12 +1014,18 @@ def health() -> dict[str, Any]:
         "microsites": len(load_microsites()),
         "runs": len(load_runs()),
         "prompts": len(load_prompts()),
+        "company_profiles": len(COMPANY_PROFILE_CONFIG),
         "model": get_openai_model_name(),
         "langsmith_tracing": os.getenv("LANGSMITH_TRACING", "false"),
         "mcp_enabled": bool(mcp_servers),
         "mcp_servers": mcp_servers,
         "mcp_config_error": mcp_config_error,
     }
+
+
+@app.get("/api/company-profiles", response_model=list[CompanyProfileRecord])
+def get_company_profiles() -> list[CompanyProfileRecord]:
+    return list_company_profiles()
 
 
 @app.get("/api/mcp/status")
@@ -950,8 +1112,8 @@ def activate_prompt(prompt_id: str) -> PromptActivationResponse:
     return PromptActivationResponse(prompt=activated, stage=activated.stage)
 
 
-@app.delete("/api/prompts/{prompt_id}", status_code=204)
-def delete_prompt(prompt_id: str) -> None:
+@app.delete("/api/prompts/{prompt_id}")
+def delete_prompt(prompt_id: str) -> dict[str, bool]:
     prompts = load_prompts()
     target = next((prompt for prompt in prompts if prompt.id == prompt_id), None)
     if target is None:
@@ -960,6 +1122,7 @@ def delete_prompt(prompt_id: str) -> None:
         raise HTTPException(status_code=400, detail="Active prompts cannot be deleted")
 
     save_prompts([prompt for prompt in prompts if prompt.id != prompt_id])
+    return {"deleted": True}
 
 
 @app.post("/api/microsites/generate-batch", response_model=GenerateMicrositesResponse)
@@ -968,14 +1131,16 @@ def generate_batch(request: GenerateMicrositesRequest) -> GenerateMicrositesResp
     if not prospects:
         raise HTTPException(status_code=400, detail="At least one prospect is required")
 
+    source_company_profile = get_company_profile(request.company_profile_id)
+
     records = load_microsites()
     created: list[MicrositeRecord] = []
     failed: list[str] = []
 
     for prospect in prospects:
-        microsite, run = run_generation(prospect)
+        microsite, run = run_generation(prospect, source_company_profile.id)
         if microsite is None:
-            failed.append(f"{prospect}: {run.error or 'generation failed'}")
+            failed.append(f"{source_company_profile.name} x {prospect}: {run.error or 'generation failed'}")
             continue
         created.append(microsite)
 

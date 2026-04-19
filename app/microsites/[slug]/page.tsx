@@ -7,6 +7,10 @@ import { CSSProperties, useEffect, useMemo, useState } from "react";
 type MicrositeRecord = {
   company_name: string;
   slug: string;
+  source_company_id: string;
+  source_company_name: string;
+  source_company_website: string;
+  source_company_logo_path: string;
   tagline: string;
   headline: string;
   summary: string;
@@ -116,10 +120,10 @@ export default function MicrositeDetailPage() {
     <main className="detailShell" style={themeStyle}>
       <nav className="topbar detailTopbar">
         <div className="brand">
-          <div className="brandIcon">/{microsite.slug.slice(0, 2).toUpperCase()}</div>
+          <img alt={microsite.source_company_name} className="brandLogo" src={microsite.source_company_logo_path} />
           <div className="brandBlock">
             <strong className="brandTitle">{microsite.company_name}</strong>
-            <span className="brandCaption">Generated microsite route</span>
+            <span className="brandCaption">Built using {microsite.source_company_name} brand system</span>
           </div>
         </div>
 
@@ -155,6 +159,9 @@ export default function MicrositeDetailPage() {
               <p className="artifactKicker">{microsite.tagline}</p>
               <h1 className="artifactTitle">{microsite.headline}</h1>
               <p className="artifactSummary">{microsite.summary}</p>
+              <p className="statusNote">
+                Source company: {microsite.source_company_name} · {microsite.source_company_website}
+              </p>
 
               <div className="artifactStatRow">
                 {microsite.stats.map((stat) => (

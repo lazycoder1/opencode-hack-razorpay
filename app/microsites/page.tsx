@@ -7,6 +7,7 @@ type MicrositeRecord = {
   id: string;
   company_name: string;
   slug: string;
+  source_company_name: string;
   tagline: string;
   headline: string;
   summary: string;
@@ -116,7 +117,7 @@ export default function MicrositesPage() {
                   type="button"
                 >
                   <div className="selectorTop">
-                    <span>{item.tagline}</span>
+                    <span>{item.source_company_name}</span>
                     <strong>{new Date(item.generated_at).toLocaleDateString()}</strong>
                   </div>
                   <strong className="selectorTitle">{item.company_name}</strong>
@@ -139,6 +140,7 @@ export default function MicrositesPage() {
                 <h2 className="sectionTitle">{selectedMicrosite.headline}</h2>
               </div>
               <div className="badgeRow">
+                <span className="badge">{selectedMicrosite.source_company_name}</span>
                 <span className="badge">{selectedMicrosite.company_name}</span>
                 <span className="badge">/{selectedMicrosite.slug}</span>
               </div>

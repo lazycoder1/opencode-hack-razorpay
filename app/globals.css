@@ -563,6 +563,46 @@ button {
   gap: 10px;
 }
 
+.companySelect {
+  width: 100%;
+  min-height: 52px;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text);
+  outline: none;
+}
+
+.companySelect:focus {
+  border-color: rgba(139, 125, 255, 0.45);
+  box-shadow: 0 0 0 4px rgba(139, 125, 255, 0.08);
+}
+
+.companyProfileCard {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.companyProfileTop {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.companyLogo,
+.brandLogo {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .fieldTop {
   display: flex;
   align-items: center;
@@ -933,6 +973,58 @@ button {
   border-color: rgb(var(--artifact-accent-rgb, 114 84 217) / 0.2);
   background: var(--artifact-accent, #7254d9);
   color: #ffffff;
+}
+
+.libraryRail,
+.operatorDetail,
+.emptyState,
+.runButton {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow-md);
+}
+
+.libraryRail,
+.operatorDetail,
+.emptyState {
+  padding: 26px;
+}
+
+.selectionList {
+  display: grid;
+  gap: 12px;
+}
+
+.runButton {
+  width: 100%;
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.runButton:hover,
+.runButton:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+}
+
+.runButton.active {
+  border-color: rgba(139, 125, 255, 0.45);
+  background: linear-gradient(135deg, rgba(139, 125, 255, 0.12), rgba(93, 220, 255, 0.06));
+}
+
+.runButton p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.emptyState {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
 }
 
 .promptLibraryGrid {

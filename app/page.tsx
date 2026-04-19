@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type MicrositeRecord = {
   id: string;
@@ -16,6 +16,18 @@ type GenerateResponse = {
   failed: string[];
 };
 
+type CompanyProfileRecord = {
+  id: string;
+  name: string;
+  website_url: string;
+  logo_path: string;
+  wordmark: string;
+  summary: string;
+  skills: string[];
+  brand_markdown_path: string;
+  skills_markdown_path: string;
+};
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 export default function Home() {
@@ -24,6 +36,8 @@ export default function Home() {
   );
   const [created, setCreated] = useState<MicrositeRecord[]>([]);
   const [failed, setFailed] = useState<string[]>([]);
+  const [companyProfiles, setCompanyProfiles] = useState<CompanyProfileRecord[]>([]);
+  const [selectedCompanyProfileId, setSelectedCompanyProfileId] = useState("enmovil");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -36,6 +50,32 @@ export default function Home() {
     [prospects],
   );
 
+  const selectedCompanyProfile = useMemo(
+    () => companyProfiles.find((profile) => profile.id === selectedCompanyProfileId) ?? null,
+    [companyProfiles, selectedCompanyProfileId],
+  );
+
+  useEffect(() => {
+    async function loadCompanyProfiles() {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/company-profiles`);
+        if (!response.ok) {
+          throw new Error(`Unable to load company profiles: ${response.status}`);
+        }
+
+        const data: CompanyProfileRecord[] = await response.json();
+        setCompanyProfiles(data);
+        if (data.length > 0 && !data.some((profile) => profile.id === selectedCompanyProfileId)) {
+          setSelectedCompanyProfileId(data[0].id);
+        }
+      } catch (caughtError) {
+        setError(caughtError instanceof Error ? caughtError.message : "Unable to load company profiles");
+      }
+    }
+
+    void loadCompanyProfiles();
+  }, [selectedCompanyProfileId]);
+
   async function handleGenerate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
@@ -47,7 +87,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ prospects: prospectList }),
+        body: JSON.stringify({ prospects: prospectList, company_profile_id: selectedCompanyProfileId }),
       });
 
       if (!response.ok) {
@@ -160,7 +200,11 @@ export default function Home() {
               </div>
               <div className="mockCard">
                 <p className="miniLabel">Delivery focus</p>
-                <strong>Microsite track first. Research track stays separate.</strong>
+                <strong>
+                  {selectedCompanyProfile
+                    ? `${selectedCompanyProfile.name} brand assets, skills, and markdown are active.`
+                    : "Microsite track first. Research track stays separate."}
+                </strong>
               </div>
             </div>
           </div>
@@ -176,6 +220,53 @@ export default function Home() {
             </div>
             <p className="sectionText">Today’s supported input is manual prospect entry. The UI stays explicit about that constraint.</p>
           </div>
+
+          <label className="fieldStack" htmlFor="company-profile">
+            <div className="fieldTop">
+              <strong>Source company profile</strong>
+              <span className="fieldHint">Switches design choices, assets, skills, and markdown context for agents</span>
+            </div>
+            <select
+              id="company-profile"
+              className="companySelect"
+              value={selectedCompanyProfileId}
+              onChange={(event) => setSelectedCompanyProfileId(event.target.value)}
+            >
+              {companyProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {selectedCompanyProfile ? (
+            <div className="companyProfileCard">
+              <div className="companyProfileTop">
+                <img alt={selectedCompanyProfile.name} className="companyLogo" src={selectedCompanyProfile.logo_path} />
+                <div>
+                  <p className="miniLabel">Active company</p>
+                  <strong>{selectedCompanyProfile.wordmark}</strong>
+                  <p className="statusNote">{selectedCompanyProfile.summary}</p>
+                </div>
+              </div>
+
+              <div className="miniPillRow">
+                {selectedCompanyProfile.skills.map((skill) => (
+                  <span className="miniPill" key={skill}>{skill}</span>
+                ))}
+              </div>
+
+              <div className="artifactNote">
+                <span>Loaded files</span>
+                <p>
+                  {selectedCompanyProfile.brand_markdown_path}
+                  <br />
+                  {selectedCompanyProfile.skills_markdown_path}
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           <label className="fieldStack" htmlFor="prospects">
             <div className="fieldTop">
