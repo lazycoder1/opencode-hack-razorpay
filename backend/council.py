@@ -73,6 +73,25 @@ def slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-") or "company"
 
 
+KNOWN_COMPANY_LOGOS = {
+    "razorpay": "/company-assets/razorpay-logo.svg",
+    "zomato": "/company-assets/zomato-logo.svg",
+}
+
+
+def get_known_company_logo(company_name: str) -> str:
+    return KNOWN_COMPANY_LOGOS.get(slugify(company_name), "")
+
+
+def build_remote_logo_url(website_url: str) -> str:
+    cleaned = (website_url or "").strip()
+    if not cleaned:
+        return ""
+    if not cleaned.startswith(("http://", "https://")):
+        cleaned = f"https://{cleaned}"
+    return f"https://www.google.com/s2/favicons?sz=256&domain_url={cleaned}"
+
+
 def get_model_name() -> str:
     return os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
@@ -228,6 +247,40 @@ def tavily_extract(urls: list[str]) -> list[dict[str, Any]]:
         return []
 
 
+def find_official_website(company_name: str) -> str:
+    results = tavily_search(f"official website {company_name}", max_results=5)
+    for result in results:
+        url = str(result.get("url", "")).strip()
+        if not url:
+            continue
+        lowered = url.lower()
+        if any(blocked in lowered for blocked in ["linkedin.com", "facebook.com", "instagram.com", "twitter.com", "x.com", "wikipedia.org"]):
+            continue
+        return url
+    return ""
+
+
+def resolve_company_logo(company_name: str, website_url: str | None = None) -> str:
+    known_logo = get_known_company_logo(company_name)
+    if known_logo:
+        return known_logo
+
+    website = (website_url or "").strip() or find_official_website(company_name)
+    return build_remote_logo_url(website)
+
+
+def resolve_logo_paths_async(
+    prospect: str,
+    source_company: str,
+    prospect_website: str | None = None,
+    seller_website: str | None = None,
+) -> tuple[str, str]:
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        prospect_future = pool.submit(resolve_company_logo, prospect, prospect_website)
+        seller_future = pool.submit(resolve_company_logo, source_company, seller_website)
+        return prospect_future.result(), seller_future.result()
+
+
 def run_parallel_searches(
     queries: list[str],
     per_query_results: int = 4,
@@ -374,7 +427,9 @@ DEFAULT_PROMPTS: dict[str, dict[str, str]] = {
         "user": (
             "Research this company as the SELLER in a B2B pitch. Use ONLY the context below — do not invent case studies, stats, or customers.\n\n"
             "Seller: {{source_company}} (slug: {{seller_slug}})\n"
+            "Known seller logo path: {{seller_logo_path}}\n"
             "Prospect (for relevance steering): {{prospect}}\n"
+            "Known prospect logo path: {{prospect_logo_path}}\n"
             "Manager's plan:\n{{generation_plan}}\n\n"
             "----- SELLER BRAND -----\n{{seller_brand}}\n\n"
             "----- SELLER SKILLS CONTEXT -----\n{{seller_skills}}\n\n"
@@ -394,7 +449,9 @@ DEFAULT_PROMPTS: dict[str, dict[str, str]] = {
         "user": (
             "Research this company as the PROSPECT being pitched to. Use ONLY the web context below. Every claim must trace to a source URL.\n\n"
             "Prospect: {{prospect}}\n"
+            "Known prospect logo path: {{prospect_logo_path}}\n"
             "Being pitched by: {{source_company}}\n"
+            "Known seller logo path: {{seller_logo_path}}\n"
             "Manager's plan:\n{{generation_plan}}\n\n"
             "----- WEB CONTEXT (Tavily homepage extract + parallel searches + Reddit community signals) -----\n{{tavily_web_data}}\n\n"
             "Organize with headers: Summary, Industry, Pain Points By Segment/Scale (each with source_url), "
@@ -455,6 +512,10 @@ DEFAULT_PROMPTS: dict[str, dict[str, str]] = {
             "Each role section MUST have the matching id attribute (id=\"cio-discovery\", id=\"cfo-discovery\", id=\"champion-discovery\"). "
             "Do NOT link role pages to external URLs or the base URL — they are sections within THIS page.\n"
             "Make it feel premium and brand-appropriate (see seller brand context).\n\n"
+            "If a known logo asset path is provided below, you may use it directly in the HTML with an <img> tag. If the asset path is empty, do not invent one.\n\n"
+            "--- KNOWN LOGO ASSETS ---\n"
+            "Seller logo path: {{seller_logo_path}}\n"
+            "Prospect logo path: {{prospect_logo_path}}\n\n"
             "--- SELLER BRAND ---\n{{seller_brand}}\n\n"
             "--- SELLER SKILLS ---\n{{seller_skills}}\n\n"
             "--- NARRATIVE BRIEF (structured, from the editor) ---\n{{narrative_brief_json}}\n\n"
@@ -687,6 +748,8 @@ class CouncilState(TypedDict, total=False):
     mcp_kb_result: str
     seller_brand: str
     seller_skills: str
+    seller_logo_path: str
+    prospect_logo_path: str
 
     # Stage outputs
     generation_plan: str
@@ -743,6 +806,8 @@ def _render(template: str, state: CouncilState) -> str:
         .replace("{{source_company}}", state.get("source_company", ""))
         .replace("{{seller_slug}}", state.get("seller_slug", ""))
         .replace("{{prospect_slug}}", state.get("prospect_slug", ""))
+        .replace("{{seller_logo_path}}", state.get("seller_logo_path", ""))
+        .replace("{{prospect_logo_path}}", state.get("prospect_logo_path", ""))
         .replace("{{iteration_count}}", str(state.get("iteration_count", 0)))
         .replace("{{max_iterations}}", str(MAX_ITERATIONS))
         .replace("{{generation_plan}}", state.get("generation_plan", "No plan provided."))
@@ -1490,12 +1555,16 @@ def run_single_stage(
     prompts: dict[str, dict[str, str]],
     context: dict[str, str] | None = None,
 ) -> AgentStepResult:
+    prospect_logo_path, seller_logo_path = resolve_logo_paths_async(prospect, source_company)
+
     state: CouncilState = {
         "run_id": uuid4().hex,
         "prospect": prospect,
         "source_company": source_company,
         "prospect_slug": slugify(prospect),
         "seller_slug": slugify(source_company),
+        "prospect_logo_path": prospect_logo_path,
+        "seller_logo_path": seller_logo_path,
         "prompts": prompts,
         "steps": [],
         "iteration_count": 0,
@@ -1566,12 +1635,21 @@ def run_council(
         if skill_prompt.strip() or user_prompt_template.strip():
             prompts["generate_microsite"] = {"system": skill_prompt, "user": user_prompt_template}
 
+    prospect_logo_path, seller_logo_path = resolve_logo_paths_async(
+        prospect,
+        source_company,
+        prospect_website,
+        seller_website,
+    )
+
     initial_state: CouncilState = {
         "run_id": run_id,
         "prospect": prospect,
         "source_company": source_company,
         "prospect_slug": slugify(prospect),
         "seller_slug": slugify(source_company),
+        "prospect_logo_path": prospect_logo_path,
+        "seller_logo_path": seller_logo_path,
         "prospect_website": prospect_website,
         "seller_website": seller_website,
         "prompts": prompts,

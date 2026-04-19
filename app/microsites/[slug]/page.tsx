@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { BrandFlag } from "../../_components/BrandFlag";
+import { getKnownCompanyLogo } from "../../_lib/companyLogos";
 
 type BrandKit = {
   fonts: {
@@ -112,6 +113,11 @@ export default function MicrositeDetailPage() {
 
     return base as CSSProperties;
   }, [microsite]);
+
+  const prospectLogoPath = useMemo(
+    () => (microsite ? getKnownCompanyLogo(microsite.company_name) : null),
+    [microsite],
+  );
 
   useEffect(() => {
     if (!microsite?.brand) return;
@@ -231,6 +237,7 @@ export default function MicrositeDetailPage() {
         <div className="artifactSurface">
           <section className="artifactHero">
             <div className="artifactCopy">
+              {prospectLogoPath ? <img alt={`${microsite.company_name} logo`} className="prospectLogo" src={prospectLogoPath} /> : null}
               <p className="artifactKicker">{microsite.tagline}</p>
               <h1 className="artifactTitle">{microsite.headline}</h1>
               <p className="artifactSummary">{microsite.summary}</p>

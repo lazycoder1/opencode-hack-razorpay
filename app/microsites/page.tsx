@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { getKnownCompanyLogo } from "../_lib/companyLogos";
 
 type MicrositeRecord = {
   id: string;
@@ -49,6 +50,7 @@ export default function MicrositesPage() {
     () => microsites.find((item) => item.slug === selectedSlug) ?? microsites[0] ?? null,
     [microsites, selectedSlug],
   );
+  const selectedProspectLogo = selectedMicrosite ? getKnownCompanyLogo(selectedMicrosite.company_name) : null;
 
   return (
     <main className="pageShell">
@@ -179,11 +181,14 @@ export default function MicrositesPage() {
                 <div className="browserMeta">ready</div>
               </div>
 
-              <div className="previewContent">
-                <div className="previewHero">
-                  <p className="miniLabel">{selectedMicrosite.tagline}</p>
-                  <h3>{selectedMicrosite.headline}</h3>
-                  <p>{selectedMicrosite.summary}</p>
+                <div className="previewContent">
+                  <div className="previewHero">
+                    {selectedProspectLogo ? (
+                      <img alt={`${selectedMicrosite.company_name} logo`} className="prospectLogo prospectLogoPreview" src={selectedProspectLogo} />
+                    ) : null}
+                    <p className="miniLabel">{selectedMicrosite.tagline}</p>
+                    <h3>{selectedMicrosite.headline}</h3>
+                    <p>{selectedMicrosite.summary}</p>
                 </div>
 
                 <div className="previewStats">

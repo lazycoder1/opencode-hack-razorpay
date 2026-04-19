@@ -345,7 +345,7 @@ COMPANY_PROFILE_CONFIG = {
             },
             "hero_image_path": None,
             "favicon_path": "/company-assets/razorpay-mark.svg",
-            "wordmark_path": "/company-assets/razorpay-mark.svg",
+            "wordmark_path": "/company-assets/razorpay-logo.svg",
         },
     },
 }

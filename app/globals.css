@@ -911,6 +911,17 @@ button {
   background: #ffffff;
 }
 
+.prospectLogo {
+  height: 28px;
+  width: auto;
+  max-width: 148px;
+  object-fit: contain;
+}
+
+.prospectLogoPreview {
+  margin-bottom: 2px;
+}
+
 .previewStats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1001,6 +1012,11 @@ button {
 .artifactCopy {
   display: grid;
   gap: 14px;
+}
+
+.artifactCopy .prospectLogo {
+  height: 34px;
+  max-width: 164px;
 }
 
 .artifactKicker,
