@@ -1,1 +1,126 @@
-[]
+[
+  {
+    "id": "47ef204c4461494e81db509d877a66ff",
+    "company_name": "Helios Freight",
+    "slug": "helios-freight-005fc5",
+    "tagline": "Empowering Freight Forwarding with Insight",
+    "headline": "Helios Freight: Navigating Tomorrow's Logistics Challenges Today",
+    "summary": "Discover tailored solutions to streamline operations, enhance visibility, and drive efficiency in freight forwarding with Helios Freight. Let's explore opportunities to elevate your logistics performance together.",
+    "cta_label": "Let's Connect",
+    "visual_direction": "Clean, modern design with bold typography, complemented by dynamic imagery of freight movement and digital interfaces to emphasize innovation and agility.",
+    "generated_at": "2026-04-19T06:16:40.821431+00:00",
+    "generation_run_id": "a7939733fc144c8e955d6078be31bd81",
+    "model_name": "gpt-4.1-mini-2025-04-14",
+    "theme": {
+      "background": "#edf8f2",
+      "surface": "#f8fdf9",
+      "accent": "#1d8f61",
+      "accent_soft": "#d8f3e4",
+      "text": "#15251d",
+      "muted": "#587065"
+    },
+    "stats": [
+      "Freight forwarding industry growth at 7.5% CAGR (2023-2028)",
+      "Over 30% of logistics companies cite visibility as a top challenge",
+      "80% of freight managers seek more streamlined operational workflows"
+    ],
+    "sections": [
+      {
+        "title": "Understanding Your Freight Forwarding Needs",
+        "body": "We recognize that each freight operation has unique challenges. By aligning with your goals, we aim to uncover areas where efficiency gains and enhanced visibility are possible."
+      },
+      {
+        "title": "Driving Operational Excellence",
+        "body": "Our approach emphasizes lean processes and smart technology integration designed to reduce bottlenecks and improve shipment tracking throughout your network."
+      },
+      {
+        "title": "Enhancing Supply Chain Visibility",
+        "body": "Transparent and real-time insights are critical. We focus on leveraging data to provide you with actionable intelligence for better decision-making."
+      },
+      {
+        "title": "Collaborative Growth Partnership",
+        "body": "Beyond solutions, we value partnership. Together, we can adapt to evolving logistics demands and position Helios Freight for sustainable success."
+      }
+    ]
+  },
+  {
+    "id": "eb2acda51a5f458ba8d30e9e25685393",
+    "company_name": "Northstar Logistics",
+    "slug": "northstar-logistics-0a7291",
+    "tagline": "Manual prospect to graphical microsite",
+    "headline": "Northstar Logistics, reframed as a live microsite",
+    "summary": "A lightweight account page for Northstar Logistics that gives your team a visual starting point today. This is intentionally barebones and ready for research-driven upgrades later.",
+    "cta_label": "Open a discovery-ready walkthrough",
+    "visual_direction": "",
+    "generated_at": "2026-04-19T06:00:30.081014+00:00",
+    "generation_run_id": null,
+    "model_name": null,
+    "theme": {
+      "background": "#f4f2ff",
+      "surface": "#fbfaff",
+      "accent": "#7254d9",
+      "accent_soft": "#e4dcff",
+      "text": "#201f34",
+      "muted": "#615f79"
+    },
+    "stats": [
+      "2 narrative blocks",
+      "Unique visual palette",
+      "Ready for research enrichment"
+    ],
+    "sections": [
+      {
+        "title": "Signal",
+        "body": "Northstar Logistics gets a first-pass narrative page with a clear opening story, bold title, and sections that are ready for a future research-backed upgrade."
+      },
+      {
+        "title": "Storyline",
+        "body": "This barebones version frames Northstar Logistics as a priority account and gives the team a visual microsite instead of a static internal document."
+      },
+      {
+        "title": "Next move",
+        "body": "When the research workflow is ready, this page can swap the placeholder storyline for research-led copy, proof points, and account-specific sections."
+      }
+    ]
+  },
+  {
+    "id": "5951a9484772463cb71abaa45c7a8768",
+    "company_name": "Acme Capital",
+    "slug": "acme-capital-ad9212",
+    "tagline": "Manual prospect to graphical microsite",
+    "headline": "Acme Capital, reframed as a live microsite",
+    "summary": "A lightweight account page for Acme Capital that gives your team a visual starting point today. This is intentionally barebones and ready for research-driven upgrades later.",
+    "cta_label": "Open a discovery-ready walkthrough",
+    "visual_direction": "",
+    "generated_at": "2026-04-19T06:00:30.081064+00:00",
+    "generation_run_id": null,
+    "model_name": null,
+    "theme": {
+      "background": "#f4f2ff",
+      "surface": "#fbfaff",
+      "accent": "#7254d9",
+      "accent_soft": "#e4dcff",
+      "text": "#201f34",
+      "muted": "#615f79"
+    },
+    "stats": [
+      "2 narrative blocks",
+      "Unique visual palette",
+      "Ready for research enrichment"
+    ],
+    "sections": [
+      {
+        "title": "Signal",
+        "body": "Acme Capital gets a first-pass narrative page with a clear opening story, bold title, and sections that are ready for a future research-backed upgrade."
+      },
+      {
+        "title": "Storyline",
+        "body": "This barebones version frames Acme Capital as a priority account and gives the team a visual microsite instead of a static internal document."
+      },
+      {
+        "title": "Next move",
+        "body": "When the research workflow is ready, this page can swap the placeholder storyline for research-led copy, proof points, and account-specific sections."
+      }
+    ]
+  }
+]

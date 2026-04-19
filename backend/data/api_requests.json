@@ -1,0 +1,50 @@
+[
+  {
+    "id": "9134b94ee8354219832b7d0265159071",
+    "path": "/api/health",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.17,
+    "occurred_at": "2026-04-19T06:17:32.560776+00:00"
+  },
+  {
+    "id": "b53b27fa99124c02a3772b5cfa3d3d81",
+    "path": "/api/observability/requests",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 0.89,
+    "occurred_at": "2026-04-19T06:16:52.525516+00:00"
+  },
+  {
+    "id": "fc8acc5282d342109ae1225055c40d40",
+    "path": "/api/observability/runs",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.05,
+    "occurred_at": "2026-04-19T06:16:52.513246+00:00"
+  },
+  {
+    "id": "e5b089608cee41bd872be09a2ed7f67c",
+    "path": "/api/microsites/generate-batch",
+    "method": "POST",
+    "status_code": 200,
+    "duration_ms": 3691.63,
+    "occurred_at": "2026-04-19T06:16:37.131326+00:00"
+  },
+  {
+    "id": "3a3f03c902e34577b974942d40fc9e73",
+    "path": "/api/observability/runs",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.41,
+    "occurred_at": "2026-04-19T06:16:37.387314+00:00"
+  },
+  {
+    "id": "a4db21f9e50646e7a6d1fc464acca000",
+    "path": "/api/health",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.63,
+    "occurred_at": "2026-04-19T06:16:37.092217+00:00"
+  }
+]

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Website Creator Starter",
-  description: "Basic Next.js frontend connected to a FastAPI backend.",
+  title: "Microsite Studio",
+  description: "Editorial batch microsite generation with live observability.",
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="appBody">{children}</body>
     </html>
   );
 }
