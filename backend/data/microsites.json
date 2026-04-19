@@ -1,5 +1,181 @@
 [
   {
+    "id": "f3fa88cd915c4b7382c43a2f5055e096",
+    "company_name": "Northstar Logistics",
+    "slug": "northstar-logistics-6476f0",
+    "tagline": "Navigating Tomorrow's Logistics, Today.",
+    "headline": "Empowering Northstar Logistics to Reach New Heights",
+    "summary": "Discover tailored solutions designed to streamline operations, enhance efficiency, and drive growth for Northstar Logistics.",
+    "cta_label": "Explore Solutions",
+    "visual_direction": "Clean, modern design with dynamic navigation maps and bold, directional arrows highlighting movement and progress.",
+    "generated_at": "2026-04-19T06:32:36.721282+00:00",
+    "generation_run_id": "4e4074e69ca44093a269e6831b507c9a",
+    "model_name": "gpt-4.1-mini-2025-04-14",
+    "theme": {
+      "background": "#f4f2ff",
+      "surface": "#fbfaff",
+      "accent": "#7254d9",
+      "accent_soft": "#e4dcff",
+      "text": "#201f34",
+      "muted": "#615f79"
+    },
+    "stats": [
+      "75% of logistics companies report improved delivery times with integrated tech.",
+      "40% reduction in operational costs after digital transformation.",
+      "85% increase in customer satisfaction through enhanced tracking systems."
+    ],
+    "sections": [
+      {
+        "title": "Optimized Routing",
+        "body": "Leverage advanced algorithms to find the most efficient delivery routes, reducing fuel costs and transit times."
+      },
+      {
+        "title": "Real-Time Tracking",
+        "body": "Implement state-of-the-art tracking systems to provide customers and teams with up-to-the-minute shipment updates."
+      },
+      {
+        "title": "Scalable Solutions",
+        "body": "Adopt flexible technologies that grow with your business, adapting to changing demands and expanding operations."
+      },
+      {
+        "title": "Data-Driven Insights",
+        "body": "Utilize comprehensive analytics to inform strategic decisions and identify opportunities for continuous improvement."
+      }
+    ]
+  },
+  {
+    "id": "c96ec62d8f9d4a8cbf53e396d1c9b309",
+    "company_name": "Acme Capital",
+    "slug": "acme-capital-f45973",
+    "tagline": "Empowering Acme Capital's Next Leap Forward",
+    "headline": "Unlock New Growth Opportunities with Tailored Insights",
+    "summary": "At [Your Company], we specialize in delivering actionable strategies that align with Acme Capital's commitment to innovation and growth. Explore how data-driven solutions can enhance your investment outcomes.",
+    "cta_label": "Discover Opportunities",
+    "visual_direction": "A sleek, modern design with dynamic charts and bold typography to convey confidence and clarity.",
+    "generated_at": "2026-04-19T06:32:40.385231+00:00",
+    "generation_run_id": "c560493795934894a692e0d39ac46bb0",
+    "model_name": "gpt-4.1-mini-2025-04-14",
+    "theme": {
+      "background": "#f4f2ff",
+      "surface": "#fbfaff",
+      "accent": "#7254d9",
+      "accent_soft": "#e4dcff",
+      "text": "#201f34",
+      "muted": "#615f79"
+    },
+    "stats": [
+      "85% of leading capital firms saw improved ROI with tailored analytics",
+      "70% increase in deal sourcing efficiency reported by clients",
+      "90% client retention rate over the past 5 years"
+    ],
+    "sections": [
+      {
+        "title": "Customized Analytics",
+        "body": "Leverage insights designed specifically for capital investment environments to identify untapped market potentials."
+      },
+      {
+        "title": "Streamlined Deal Flow",
+        "body": "Optimize your sourcing and evaluation processes with tools that enhance efficiency and decision-making speed."
+      },
+      {
+        "title": "Risk Management Insights",
+        "body": "Gain a clearer understanding of portfolio risk factors to make more informed investment choices."
+      },
+      {
+        "title": "Collaborative Support",
+        "body": "Partner with experts who prioritize your goals and provide ongoing strategic guidance tailored to Acme Capital."
+      }
+    ]
+  },
+  {
+    "id": "b64f0c8a3e854e7ba9710793f414d318",
+    "company_name": "Juniper Health",
+    "slug": "juniper-health-366a7b",
+    "tagline": "Empowering Healthcare Innovation",
+    "headline": "Transforming Patient Care with Juniper Health",
+    "summary": "Discover how Juniper Health is shaping the future of healthcare delivery through innovative technologies and patient-centric solutions.",
+    "cta_label": "Explore Opportunities",
+    "visual_direction": "Clean, modern design with calming blue and green tones, accented by simple medical icons and intuitive layouts.",
+    "generated_at": "2026-04-19T06:32:42.482339+00:00",
+    "generation_run_id": "6a00d37b193543df819a47c3cdb84284",
+    "model_name": "gpt-4.1-mini-2025-04-14",
+    "theme": {
+      "background": "#eef6ff",
+      "surface": "#f8fbff",
+      "accent": "#2563eb",
+      "accent_soft": "#d8e7ff",
+      "text": "#172033",
+      "muted": "#5a6780"
+    },
+    "stats": [
+      "Over 10,000 patients served yearly",
+      "Partnered with 50+ healthcare providers",
+      "Achieved 15% improvement in patient satisfaction"
+    ],
+    "sections": [
+      {
+        "title": "Our Mission",
+        "body": "Juniper Health is committed to enhancing healthcare experiences by integrating cutting-edge technology with compassionate care."
+      },
+      {
+        "title": "Innovative Solutions",
+        "body": "From telemedicine to personalized health plans, Juniper Health leverages digital tools to improve accessibility and outcomes."
+      },
+      {
+        "title": "Collaboration & Growth",
+        "body": "We actively seek partnerships that foster innovation and expand the reach of quality healthcare services."
+      },
+      {
+        "title": "Future Outlook",
+        "body": "Continuously evolving, Juniper Health focuses on sustainable growth and adapting to patient needs in a dynamic healthcare landscape."
+      }
+    ]
+  },
+  {
+    "id": "5478009f1a5449f8a1ec8398100ba3d5",
+    "company_name": "Blue Atlas Energy",
+    "slug": "blue-atlas-energy-7ab844",
+    "tagline": "Empowering Energy Insights for Tomorrow",
+    "headline": "Unlocking Potential in Energy Management with Blue Atlas Energy",
+    "summary": "Explore innovative solutions to streamline energy operations, enhance data clarity, and support sustainable growth at Blue Atlas Energy. Our approach aligns with your commitment to efficient and responsible energy management.",
+    "cta_label": "Discover How We Can Help",
+    "visual_direction": "Clean, modern design with blue and green accents symbolizing energy and sustainability, incorporating dynamic energy-related graphics and minimalistic data visuals.",
+    "generated_at": "2026-04-19T06:32:44.688155+00:00",
+    "generation_run_id": "7392ff140f9a4e2096fad3b5b056d8c6",
+    "model_name": "gpt-4.1-mini-2025-04-14",
+    "theme": {
+      "background": "#eef6ff",
+      "surface": "#f8fbff",
+      "accent": "#2563eb",
+      "accent_soft": "#d8e7ff",
+      "text": "#172033",
+      "muted": "#5a6780"
+    },
+    "stats": [
+      "85% of energy companies cite data integration as a key challenge",
+      "70% increase in operational efficiency reported by adopters of advanced analytics",
+      "50% reduction in downtime achieved through predictive maintenance technologies"
+    ],
+    "sections": [
+      {
+        "title": "Understanding Your Energy Landscape",
+        "body": "We begin with a comprehensive look at your current operations to identify opportunities for optimization and innovation."
+      },
+      {
+        "title": "Data-Driven Decision Making",
+        "body": "Harness the power of integrated data analytics to make informed decisions that drive efficiency and sustainability."
+      },
+      {
+        "title": "Sustainable Growth Strategies",
+        "body": "Develop actionable plans that balance operational demands with environmental responsibility to ensure long-term success."
+      },
+      {
+        "title": "Collaborative Partnership",
+        "body": "Work alongside a team dedicated to continuous improvement and tailored solutions aligned with Blue Atlas Energy's goals."
+      }
+    ]
+  },
+  {
     "id": "47ef204c4461494e81db509d877a66ff",
     "company_name": "Helios Freight",
     "slug": "helios-freight-005fc5",

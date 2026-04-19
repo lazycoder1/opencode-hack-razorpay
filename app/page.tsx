@@ -67,191 +67,231 @@ export default function Home() {
   return (
     <main className="pageShell">
       <nav className="topbar">
-        <div className="brandMark">
-          <div className="brandGlyph">MS</div>
-          <div className="brandCopy">
-            <strong>Microsite Studio</strong>
-            <span>Editorial outbound engine</span>
+        <div className="brand">
+          <div className="brandIcon">MS</div>
+          <div className="brandBlock">
+            <strong className="brandTitle">Microsite Studio</strong>
+            <span className="brandCaption">Batch generation control plane</span>
           </div>
         </div>
-        <div className="topbarNav">
-          <Link href="/microsites">Microsites</Link>
-          <Link href="/observability">Observability</Link>
+
+        <div className="navCluster">
+          <Link className="navLink" href="/microsites">
+            Microsites
+          </Link>
+          <Link className="navLink" href="/prompts">
+            Prompt Library
+          </Link>
+          <Link className="navLink" href="/observability">
+            Observability
+          </Link>
         </div>
       </nav>
 
       <section className="heroGrid">
-        <article className="introPanel">
-          <div className="introDeck">
-            <div>
-              <p className="eyebrowCool">Frontend redesign · signal-room edition</p>
-              <h1 className="heroTitle">From raw prospect names to persuasive microsite drops.</h1>
-              <p className="lede">
-                This surface is the control room for the microsite track: queue a batch, trigger generation,
-                inspect outcomes, then move directly into the generated routes and observability trail.
-              </p>
-            </div>
+        <article className="heroPanel">
+          <p className="kicker">Operator workspace</p>
+          <h1 className="heroTitle">Run batch microsite generation from one calm control surface.</h1>
+          <p className="heroText">
+            Queue prospects, trigger the generation pipeline, inspect provenance, and reopen every persisted
+            route. The surface should feel like a serious internal product, not a marketing page.
+          </p>
 
-            <div className="introDeck">
-              <div className="signalRow">
-                <div className="signalPill">
-                  <span>Input mode</span>
-                  <strong>Manual list</strong>
+          <div className="badgeRow">
+            <span className="badge">Manual intake</span>
+            <span className="badge">Persisted microsites</span>
+            <span className="badge">Run traceability</span>
+          </div>
+
+          <div className="metricGrid metricGridFour">
+            <article className="metricCard">
+              <span>Prospects queued</span>
+              <strong>{prospectList.length}</strong>
+            </article>
+            <article className="metricCard">
+              <span>Created now</span>
+              <strong>{created.length}</strong>
+            </article>
+            <article className="metricCard">
+              <span>Failed now</span>
+              <strong>{failed.length}</strong>
+            </article>
+            <article className="metricCard">
+              <span>Track</span>
+              <strong>Microsite MVP</strong>
+            </article>
+          </div>
+        </article>
+
+        <article className="browserMock heroMock">
+          <div className="browserBar">
+            <div className="browserDots">
+              <span />
+              <span />
+              <span />
+            </div>
+            <div className="browserAddress">studio://batch/generate</div>
+            <div className="browserMeta">live</div>
+          </div>
+
+          <div className="browserContent">
+            <div className="mockBlock">
+              <p className="miniLabel">Current workflow</p>
+              <div className="mockList">
+                <div className="mockListItem active">
+                  <strong>Queue prospects</strong>
+                  <span>Paste one company per line</span>
                 </div>
-                <div className="signalPill">
-                  <span>Pipeline</span>
-                  <strong>OpenAI + LangGraph</strong>
+                <div className="mockListItem">
+                  <strong>Run generation</strong>
+                  <span>Create one persisted route per prospect</span>
                 </div>
-                <div className="signalPill">
-                  <span>Output</span>
-                  <strong>Unique microsite routes</strong>
+                <div className="mockListItem">
+                  <strong>Inspect runs</strong>
+                  <span>Timings, tokens, and request latency</span>
                 </div>
               </div>
+            </div>
 
-              <div className="metricsRow metricGrid">
-                <article className="metricCard">
-                  <span>Queued prospects</span>
-                  <strong>{prospectList.length}</strong>
-                </article>
-                <article className="metricCard">
-                  <span>Created this session</span>
-                  <strong>{created.length}</strong>
-                </article>
-                <article className="metricCard">
-                  <span>Failed this session</span>
-                  <strong>{failed.length}</strong>
-                </article>
+            <div className="mockGrid">
+              <div className="mockCard">
+                <p className="miniLabel">Data contract</p>
+                <strong>Slug, microsite output, generation run, API request log</strong>
+              </div>
+              <div className="mockCard">
+                <p className="miniLabel">Delivery focus</p>
+                <strong>Microsite track first. Research track stays separate.</strong>
               </div>
             </div>
           </div>
         </article>
+      </section>
 
-        <form className="composerPanel" onSubmit={handleGenerate}>
+      <section className="mainGrid">
+        <form className="panel formPanel" onSubmit={handleGenerate}>
           <div className="panelHeader">
-            <p className="eyebrow">Batch console</p>
-            <p className="bodyText">
-              One prospect per line. Keep it simple, then let the backend produce a first-pass microsite for
-              every target in the list.
-            </p>
+            <div>
+              <p className="kicker">Generate</p>
+              <h2 className="sectionTitle">Paste a compact roster and run the batch.</h2>
+            </div>
+            <p className="sectionText">Today’s supported input is manual prospect entry. The UI stays explicit about that constraint.</p>
           </div>
 
-          <label className="fieldGroup" htmlFor="prospects">
-            <div className="fieldLabel">
+          <label className="fieldStack" htmlFor="prospects">
+            <div className="fieldTop">
               <strong>Prospect roster</strong>
-              <span className="fieldHint">{prospectList.length} rows ready</span>
+              <span className="fieldHint">{prospectList.length} valid rows</span>
             </div>
             <textarea
               id="prospects"
+              className="prospectInput"
               value={prospects}
               onChange={(event) => setProspects(event.target.value)}
-              placeholder="Northstar Logistics&#10;Acme Capital&#10;Juniper Health"
+              placeholder="Northstar Logistics&#10;Acme Capital&#10;Juniper Health&#10;Blue Atlas Energy"
             />
           </label>
 
-          <div className="heroActions">
-            <div className="actionCluster">
-              <button className="buttonPrimary" type="submit" disabled={loading || prospectList.length === 0}>
-                {loading ? "Generating batch..." : "Generate microsites"}
-              </button>
-              <Link className="buttonGhost" href="/microsites">
-                Open library
-              </Link>
-            </div>
-            <Link className="buttonSubtle" href="/observability">
-              View traces
+          <div className="actionRow">
+            <button className="buttonPrimary" type="submit" disabled={loading || prospectList.length === 0}>
+              {loading ? "Generating microsites..." : "Generate microsites"}
+            </button>
+            <Link className="buttonSecondary" href="/microsites">
+              Open microsite library
+            </Link>
+            <Link className="buttonTertiary" href="/observability">
+              Inspect observability
             </Link>
           </div>
 
-          <div className="statusBlock">
-            <div className="statusPills">
-              <div className={`statusPill ${loading ? "neutral" : "success"}`}>
-                {loading ? "Generation in progress" : "Ready to run"}
-              </div>
-              {created.length > 0 ? <div className="statusPill success">Latest run produced routes</div> : null}
-              {failed.length > 0 ? <div className="statusPill danger">Some prospects failed</div> : null}
-            </div>
-
-            {error ? <p className="errorText">{error}</p> : null}
-
-            {failed.length > 0 ? (
-              <div className="warningList">
-                {failed.map((item) => (
-                  <p key={item}>{item}</p>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </form>
-      </section>
-
-      <section className="splitPanel">
-        <article className="panel">
-          <div className="panelHeader">
-            <p className="eyebrow">Workflow</p>
-            <h2 className="pageTitle">Four surfaces, one operating loop.</h2>
+          <div className="statusRow">
+            <span className={`statusChip ${loading ? "statusPending" : "statusReady"}`}>
+              {loading ? "Generation in progress" : "Ready"}
+            </span>
+            {created.length > 0 ? <span className="statusChip statusReady">Routes created</span> : null}
+            {failed.length > 0 ? <span className="statusChip statusError">Some prospects failed</span> : null}
           </div>
 
-          <div className="summaryGrid">
-            <article className="summaryCard">
-              <div>
-                <p className="summaryLabel">01 · Queue</p>
-                <h3>Manual prospect intake stays front and center.</h3>
-              </div>
-              <p>Use plain company names for now. This page remains the fastest route to a first demo batch.</p>
-            </article>
-            <article className="summaryCard">
-              <div>
-                <p className="summaryLabel">02 · Generate</p>
-                <h3>Kick off a traced batch generation run.</h3>
-              </div>
-              <p>The backend writes structured microsites and run logs so the frontend reads persisted state only.</p>
-            </article>
-            <article className="summaryCard">
-              <div>
-                <p className="summaryLabel">03 · Browse</p>
-                <h3>Review every generated microsite in one library.</h3>
-              </div>
-              <p>Open a route instantly, inspect the headline, and move from selector view into the rendered page.</p>
-            </article>
-            <article className="summaryCard">
-              <div>
-                <p className="summaryLabel">04 · Trace</p>
-                <h3>Keep observability visible as part of the product.</h3>
-              </div>
-              <p>Operators can inspect timings, prompts, token counts, and request latency without touching raw JSON.</p>
-            </article>
-          </div>
-        </article>
+          {error ? <p className="errorText">{error}</p> : null}
 
-        <article className="panel resultsPanel">
-          <div className="panelHeader">
-            <p className="eyebrow">Latest session</p>
-            <h2 className="pageTitle">Fresh routes from the current batch.</h2>
-          </div>
-
-          {created.length === 0 ? (
-            <div className="emptyState">
-              <p>No microsites generated in this session yet. Run a batch to populate the route board.</p>
-            </div>
-          ) : (
-            <div className="summaryGrid">
-              {created.map((item) => (
-                <article className="summaryCard" key={item.id}>
-                  <div>
-                    <p className="summaryLabel">{item.company_name}</p>
-                    <h3>{item.headline}</h3>
-                  </div>
-                  <div className="introStack">
-                    <p className="summaryRoute">/{item.slug}</p>
-                    <Link className="summaryAction" href={`/microsites/${item.slug}`}>
-                      Open microsite
-                    </Link>
-                  </div>
-                </article>
+          {failed.length > 0 ? (
+            <div className="feedbackStack">
+              {failed.map((item) => (
+                <p className="errorText" key={item}>
+                  {item}
+                </p>
               ))}
             </div>
-          )}
-        </article>
+          ) : null}
+        </form>
+
+        <aside className="panel flowPanel">
+          <div className="panelHeader compactHeader">
+            <div>
+              <p className="kicker">Workflow</p>
+              <h2 className="sectionTitle">One product loop, four visible surfaces.</h2>
+            </div>
+          </div>
+
+          <div className="flowList">
+            <article className="flowItem">
+              <span className="flowIndex">01</span>
+              <div>
+                <strong>Enter prospects manually</strong>
+                <p>Keep intake direct and avoid fake complexity before the demo needs it.</p>
+              </div>
+            </article>
+            <article className="flowItem">
+              <span className="flowIndex">02</span>
+              <div>
+                <strong>Generate persisted microsites</strong>
+                <p>Each company gets a unique slug and a structured output that can be reopened later.</p>
+              </div>
+            </article>
+            <article className="flowItem">
+              <span className="flowIndex">03</span>
+              <div>
+                <strong>Inspect generation quality</strong>
+                <p>Observability is part of the product surface, not a hidden admin afterthought.</p>
+              </div>
+            </article>
+            <article className="flowItem">
+              <span className="flowIndex">04</span>
+              <div>
+                <strong>Use the microsite as the artifact</strong>
+                <p>Generated pages should feel credible, first-touch safe, and ready for later research enrichment.</p>
+              </div>
+            </article>
+          </div>
+        </aside>
+      </section>
+
+      <section className="panel resultsPanel">
+        <div className="panelHeader">
+          <div>
+            <p className="kicker">Latest output</p>
+            <h2 className="sectionTitle">Recent routes from this session.</h2>
+          </div>
+          <p className="sectionText">Successful outputs stay close to the operator so the next action is obvious.</p>
+        </div>
+
+        {created.length === 0 ? (
+          <div className="emptyPanel">
+            <p>No microsites generated in this session yet.</p>
+          </div>
+        ) : (
+          <div className="resultGrid">
+            {created.map((item) => (
+              <article className="resultCard" key={item.id}>
+                <p className="miniLabel">{item.company_name}</p>
+                <h3>{item.headline}</h3>
+                <p className="resultRoute">/{item.slug}</p>
+                <Link className="textLink" href={`/microsites/${item.slug}`}>
+                  Open microsite
+                </Link>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );

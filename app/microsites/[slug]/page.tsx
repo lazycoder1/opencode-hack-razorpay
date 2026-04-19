@@ -36,7 +36,7 @@ function hexToRgb(hex: string) {
   const value = normalized.length === 3 ? normalized.split("").map((char) => `${char}${char}`).join("") : normalized;
 
   if (value.length !== 6) {
-    return "240 180 106";
+    return "114 84 217";
   }
 
   const number = Number.parseInt(value, 16);
@@ -78,23 +78,23 @@ export default function MicrositeDetailPage() {
     }
 
     return {
-      "--microsite-bg": microsite.theme.background,
-      "--microsite-surface": microsite.theme.surface,
-      "--microsite-accent": microsite.theme.accent,
-      "--microsite-soft": microsite.theme.accent_soft,
-      "--microsite-text": microsite.theme.text,
-      "--microsite-muted": microsite.theme.muted,
-      "--microsite-accent-rgb": hexToRgb(microsite.theme.accent),
-      "--microsite-soft-rgb": hexToRgb(microsite.theme.accent_soft),
+      "--artifact-bg": microsite.theme.background,
+      "--artifact-surface": microsite.theme.surface,
+      "--artifact-accent": microsite.theme.accent,
+      "--artifact-soft": microsite.theme.accent_soft,
+      "--artifact-text": microsite.theme.text,
+      "--artifact-muted": microsite.theme.muted,
+      "--artifact-accent-rgb": hexToRgb(microsite.theme.accent),
+      "--artifact-soft-rgb": hexToRgb(microsite.theme.accent_soft),
     } as CSSProperties;
   }, [microsite]);
 
   if (error) {
     return (
       <main className="pageShell">
-        <div className="emptyState">
+        <div className="emptyPanel">
           <p className="errorText">{error}</p>
-          <Link className="buttonGhost" href="/microsites">
+          <Link className="buttonSecondary" href="/microsites">
             Back to microsites
           </Link>
         </div>
@@ -105,7 +105,7 @@ export default function MicrositeDetailPage() {
   if (!microsite) {
     return (
       <main className="pageShell">
-        <div className="emptyState">
+        <div className="emptyPanel">
           <p>Loading microsite...</p>
         </div>
       </main>
@@ -113,90 +113,102 @@ export default function MicrositeDetailPage() {
   }
 
   return (
-    <main className="posterPage" style={themeStyle}>
-      <section className="posterHero">
-        <div className="posterTopbar">
-          <div className="brandMark">
-            <div className="brandGlyph">/{microsite.slug.slice(0, 2).toUpperCase()}</div>
-            <div className="brandCopy">
-              <strong>{microsite.company_name}</strong>
-              <span>Generated microsite route</span>
-            </div>
+    <main className="detailShell" style={themeStyle}>
+      <nav className="topbar detailTopbar">
+        <div className="brand">
+          <div className="brandIcon">/{microsite.slug.slice(0, 2).toUpperCase()}</div>
+          <div className="brandBlock">
+            <strong className="brandTitle">{microsite.company_name}</strong>
+            <span className="brandCaption">Generated microsite route</span>
           </div>
-          <div className="posterActions">
-            <Link className="buttonGhost" href="/microsites">
-              Back to library
+        </div>
+
+        <div className="navCluster">
+          <Link className="navLink" href="/microsites">
+            Library
+          </Link>
+          <Link className="navLink" href="/prompts">
+            Prompt Library
+          </Link>
+          {microsite.generation_run_id ? (
+            <Link className="navLink" href="/observability">
+              Observability
             </Link>
-            {microsite.generation_run_id ? (
-              <Link className="buttonSubtle" href="/observability">
-                Trace run
-              </Link>
-            ) : null}
+          ) : null}
+        </div>
+      </nav>
+
+      <section className="frameShell">
+        <div className="frameBar">
+          <div className="browserDots">
+            <span />
+            <span />
+            <span />
           </div>
+          <div className="frameAddress">/microsites/{microsite.slug}</div>
+          <div className="frameRoute">persisted</div>
         </div>
 
-        <div className="posterGrid">
-          <div>
-            <p className="eyebrowCool">{microsite.tagline}</p>
-            <h1 className="posterTitle">{microsite.headline}</h1>
-            <p className="posterSummary">{microsite.summary}</p>
+        <div className="artifactSurface">
+          <section className="artifactHero">
+            <div className="artifactCopy">
+              <p className="artifactKicker">{microsite.tagline}</p>
+              <h1 className="artifactTitle">{microsite.headline}</h1>
+              <p className="artifactSummary">{microsite.summary}</p>
 
-            <div className="posterStats">
-              {microsite.stats.map((stat) => (
-                <div className="posterStat" key={stat}>
-                  <strong>{stat}</strong>
-                </div>
-              ))}
+              <div className="artifactStatRow">
+                {microsite.stats.map((stat) => (
+                  <div className="artifactStat" key={stat}>
+                    <strong>{stat}</strong>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <aside className="posterAside">
-            <article className="posterAsideCard">
-              <span>Visual direction</span>
-              <strong>Design note</strong>
-              <p>{microsite.visual_direction}</p>
-            </article>
-            <article className="posterAsideCard">
-              <span>Generated at</span>
-              <strong>{new Date(microsite.generated_at).toLocaleString()}</strong>
-              <p>This route is persisted and can be reopened from the microsite library at any time.</p>
-            </article>
-            <article className="posterAsideCard">
-              <span>Pipeline</span>
-              <strong>{microsite.generation_run_id ? "Trace attached" : "No trace id"}</strong>
-              <p>
-                {microsite.generation_run_id
-                  ? `Run id ${microsite.generation_run_id}`
-                  : "This record was generated without a visible run identifier."}
-              </p>
-            </article>
-          </aside>
+            <aside className="artifactSidebar">
+              <article className="artifactNote">
+                <span>Visual direction</span>
+                <strong>Design brief</strong>
+                <p>{microsite.visual_direction || "A clean account-specific sales artifact with a strong first-touch narrative."}</p>
+              </article>
+              <article className="artifactNote">
+                <span>Generated at</span>
+                <strong>{new Date(microsite.generated_at).toLocaleString()}</strong>
+                <p>This microsite is persisted and can be reopened from the main library at any time.</p>
+              </article>
+              <article className="artifactNote">
+                <span>Traceability</span>
+                <strong>{microsite.generation_run_id ? "Run linked" : "No run id"}</strong>
+                <p>
+                  {microsite.generation_run_id
+                    ? `Observability run ${microsite.generation_run_id}`
+                    : "This record does not expose a generation run identifier."}
+                </p>
+              </article>
+            </aside>
+          </section>
+
+          <section className="artifactGrid">
+            {microsite.sections.map((section, index) => (
+              <article className={`artifactSection ${index === 0 ? "artifactSectionWide" : ""}`} key={section.title}>
+                <p className="artifactSectionLabel">Section {String(index + 1).padStart(2, "0")}</p>
+                <h2>{section.title}</h2>
+                <p>{section.body}</p>
+              </article>
+            ))}
+          </section>
+
+          <section className="artifactCta">
+            <div>
+              <p className="artifactSectionLabel">Next move</p>
+              <h2>Use this as the reusable sales artifact, then enrich it with future research outputs.</h2>
+            </div>
+
+            <button className="artifactButton" type="button">
+              {microsite.cta_label}
+            </button>
+          </section>
         </div>
-      </section>
-
-      <section className="sectionGrid">
-        {microsite.sections.map((section, index) => {
-          const className =
-            index % 3 === 0 ? "sectionCard wide" : index % 3 === 1 ? "sectionCard" : "sectionCard tight";
-
-          return (
-            <article className={className} key={section.title}>
-              <p className="sectionLabel">Section {String(index + 1).padStart(2, "0")}</p>
-              <h2 className="spotlightTitle">{section.title}</h2>
-              <p>{section.body}</p>
-            </article>
-          );
-        })}
-      </section>
-
-      <section className="ctaBand">
-        <div>
-          <p className="eyebrow">Ready for the next pass</p>
-          <h2>Use this draft as the baseline, then enrich research, narrative, and operator traceability.</h2>
-        </div>
-        <button className="buttonPrimary" type="button">
-          {microsite.cta_label}
-        </button>
       </section>
     </main>
   );

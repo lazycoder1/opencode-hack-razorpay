@@ -47,60 +47,79 @@ export default function MicrositesPage() {
   return (
     <main className="pageShell">
       <nav className="topbar">
-        <div className="brandMark">
-          <div className="brandGlyph">MS</div>
-          <div className="brandCopy">
-            <strong>Microsite Library</strong>
-            <span>Generated routes index</span>
+        <div className="brand">
+          <div className="brandIcon">LB</div>
+          <div className="brandBlock">
+            <strong className="brandTitle">Microsite Library</strong>
+            <span className="brandCaption">Persisted route index</span>
           </div>
         </div>
-        <div className="topbarNav">
-          <Link href="/">Create</Link>
-          <Link href="/observability">Observability</Link>
+
+        <div className="navCluster">
+          <Link className="navLink" href="/">
+            Create
+          </Link>
+          <Link className="navLink" href="/prompts">
+            Prompt Library
+          </Link>
+          <Link className="navLink" href="/observability">
+            Observability
+          </Link>
         </div>
       </nav>
 
-      <section className="pageHeader">
+      <section className="pageIntro">
         <div>
-          <p className="eyebrow">Stored microsites</p>
-          <h1 className="pageTitle">Browse the full account route board.</h1>
+          <p className="kicker">Generated assets</p>
+          <h1 className="pageTitle">Browse the route library like a product inventory.</h1>
+          <p className="sectionText">The library stays list-detail, fast to scan, and easy to reopen. Each microsite remains a persisted asset, not a temporary session artifact.</p>
         </div>
-        <div className="heroMeta">
-          <div className="metaItem">
+
+        <div className="metricGrid metricGridThree compactMetrics">
+          <article className="metricCard">
             <span>Total microsites</span>
             <strong>{microsites.length}</strong>
-          </div>
-          <div className="metaItem">
+          </article>
+          <article className="metricCard">
             <span>Status</span>
-            <strong>{microsites.length === 0 ? "Waiting" : "Ready"}</strong>
-          </div>
+            <strong>{microsites.length > 0 ? "Available" : "Waiting"}</strong>
+          </article>
+          <article className="metricCard">
+            <span>Surface</span>
+            <strong>List + detail</strong>
+          </article>
         </div>
       </section>
 
       {error ? <p className="errorText">{error}</p> : null}
 
-      <section className="libraryLayout">
-        <aside className="libraryRail">
-          <div className="panelHeader">
-            <p className="eyebrowCool">Selector</p>
-            <p className="bodyText">Switch between generated accounts and open the final route from the spotlight.</p>
+      <section className="libraryGrid">
+        <aside className="panel selectorPanel">
+          <div className="panelHeader compactHeader">
+            <div>
+              <p className="kicker">Selector</p>
+              <h2 className="sectionTitle">Stored microsites</h2>
+            </div>
           </div>
 
           {microsites.length === 0 ? (
-            <div className="emptyState">
-              <p>No microsites have been generated yet.</p>
+            <div className="emptyPanel">
+              <p>No microsites generated yet.</p>
             </div>
           ) : (
-            <div className="selectionList">
+            <div className="selectorList">
               {microsites.map((item) => (
                 <button
                   key={item.id}
-                  className={`libraryButton ${item.slug === selectedMicrosite?.slug ? "active" : ""}`}
+                  className={`selectorButton ${item.slug === selectedMicrosite?.slug ? "active" : ""}`}
                   onClick={() => setSelectedSlug(item.slug)}
                   type="button"
                 >
-                  <span>{item.tagline}</span>
-                  <strong>{item.company_name}</strong>
+                  <div className="selectorTop">
+                    <span>{item.tagline}</span>
+                    <strong>{new Date(item.generated_at).toLocaleDateString()}</strong>
+                  </div>
+                  <strong className="selectorTitle">{item.company_name}</strong>
                   <p>{item.slug}</p>
                 </button>
               ))}
@@ -109,50 +128,58 @@ export default function MicrositesPage() {
         </aside>
 
         {!selectedMicrosite ? (
-          <div className="emptyState">
-            <p>Select a microsite once the library is populated.</p>
+          <div className="emptyPanel">
+            <p>Select a microsite when routes are available.</p>
           </div>
         ) : (
-          <article className="spotlightCard">
-            <div className="spotlightMeta">
+          <article className="panel previewPanel">
+            <div className="previewHeader">
               <div>
-                <p className="eyebrowCool">Spotlight route</p>
-                <h2 className="spotlightTitle">{selectedMicrosite.headline}</h2>
+                <p className="kicker">Selected route</p>
+                <h2 className="sectionTitle">{selectedMicrosite.headline}</h2>
               </div>
-              <div className="miniPillRow">
-                <div className="miniPill">
-                  <span>Company</span>
-                  <strong>{selectedMicrosite.company_name}</strong>
+              <div className="badgeRow">
+                <span className="badge">{selectedMicrosite.company_name}</span>
+                <span className="badge">/{selectedMicrosite.slug}</span>
+              </div>
+            </div>
+
+            <div className="browserMock previewMock">
+              <div className="browserBar">
+                <div className="browserDots">
+                  <span />
+                  <span />
+                  <span />
                 </div>
-                <div className="miniPill">
-                  <span>Generated</span>
-                  <strong>{new Date(selectedMicrosite.generated_at).toLocaleDateString()}</strong>
+                <div className="browserAddress">/microsites/{selectedMicrosite.slug}</div>
+                <div className="browserMeta">ready</div>
+              </div>
+
+              <div className="previewContent">
+                <div className="previewHero">
+                  <p className="miniLabel">{selectedMicrosite.tagline}</p>
+                  <h3>{selectedMicrosite.headline}</h3>
+                  <p>{selectedMicrosite.summary}</p>
+                </div>
+
+                <div className="previewStats">
+                  <div className="previewStat">
+                    <span>Route type</span>
+                    <strong>Persisted detail page</strong>
+                  </div>
+                  <div className="previewStat">
+                    <span>Generated</span>
+                    <strong>{new Date(selectedMicrosite.generated_at).toLocaleString()}</strong>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <p className="spotlightBody">{selectedMicrosite.summary}</p>
-
-            <div className="metricsRow metricGrid">
-              <article className="metricCard">
-                <span>Route</span>
-                <strong>/{selectedMicrosite.slug}</strong>
-              </article>
-              <article className="metricCard">
-                <span>Mode</span>
-                <strong>Generated</strong>
-              </article>
-              <article className="metricCard">
-                <span>Surface</span>
-                <strong>Microsite detail</strong>
-              </article>
-            </div>
-
-            <div className="heroActions">
+            <div className="actionRow">
               <Link className="buttonPrimary" href={`/microsites/${selectedMicrosite.slug}`}>
-                Open microsite page
+                Open microsite
               </Link>
-              <Link className="buttonGhost" href="/observability">
+              <Link className="buttonSecondary" href="/observability">
                 Inspect generation trace
               </Link>
             </div>

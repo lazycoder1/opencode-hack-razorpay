@@ -1,0 +1,24 @@
+[
+  {
+    "id": "03b2f61fe9c04a598a284be92893a29e",
+    "name": "Default MCP Research",
+    "slug": "default-mcp-research",
+    "stage": "mcp_research",
+    "description": "Default web research brief for collecting safe public context.",
+    "content": "You are gathering concise external context for a first-touch outbound microsite. Use the available MCP tools to research the prospect company and return only grounded, publicly supportable details. The prospect company is: {{company_name}}. Return a short plain-text brief with: company summary, notable public signals, credible themes for personalization, and unknowns that should not be claimed. Do not invent specifics.",
+    "is_active": true,
+    "created_at": "2026-04-19T06:42:21.703836+00:00",
+    "updated_at": "2026-04-19T06:42:21.703836+00:00"
+  },
+  {
+    "id": "b8038202242344a2aff82bd5b27c3dcc",
+    "name": "Default Microsite Generation",
+    "slug": "default-microsite-generation",
+    "stage": "microsite_generation",
+    "description": "Default generation prompt for first-touch graphical microsites.",
+    "content": "You are generating a lightweight but visually distinctive outbound sales microsite. Create clean first-touch copy for a single prospect company. Do not invent private facts, internal initiatives, or unverified stakeholder pain. Keep the copy credible, discovery-oriented, and ready to be upgraded by a future research layer. The prospect company is: {{company_name}}. Return a visually memorable microsite package with a strong headline, concise summary, CTA, 3 stats, a visual direction sentence, and 3 to 4 short sections.{{mcp_context_block}}",
+    "is_active": true,
+    "created_at": "2026-04-19T06:42:21.703836+00:00",
+    "updated_at": "2026-04-19T06:42:21.703836+00:00"
+  }
+]

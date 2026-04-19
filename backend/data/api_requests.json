@@ -1,5 +1,125 @@
 [
   {
+    "id": "60e653f131e9456c823a9bb325a103e1",
+    "path": "/api/microsites/by-slug/blue-atlas-energy-7ab844",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.04,
+    "occurred_at": "2026-04-19T06:32:53.443569+00:00"
+  },
+  {
+    "id": "fa1130a69ac74ec7b75b214b09851ff4",
+    "path": "/api/microsites/by-slug/blue-atlas-energy-7ab844",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 0.94,
+    "occurred_at": "2026-04-19T06:32:53.408223+00:00"
+  },
+  {
+    "id": "9a8644133adb48dd8fb2c6988282b787",
+    "path": "/api/observability/runs",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.82,
+    "occurred_at": "2026-04-19T06:32:47.245085+00:00"
+  },
+  {
+    "id": "073c51a5bd1a4f3f8e6eed742b7178ea",
+    "path": "/api/observability/requests",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.28,
+    "occurred_at": "2026-04-19T06:32:47.244653+00:00"
+  },
+  {
+    "id": "1a3c5726c349410a84d8c6b92346d247",
+    "path": "/api/observability/runs",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 2.02,
+    "occurred_at": "2026-04-19T06:32:47.241956+00:00"
+  },
+  {
+    "id": "7c691711e07e475ea7a0a911a95ba4ec",
+    "path": "/api/observability/requests",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.38,
+    "occurred_at": "2026-04-19T06:32:47.242016+00:00"
+  },
+  {
+    "id": "0fbf50ec556a43e18a52cb9b02f89c80",
+    "path": "/api/microsites/generate-batch",
+    "method": "POST",
+    "status_code": 200,
+    "duration_ms": 11449.08,
+    "occurred_at": "2026-04-19T06:32:33.240852+00:00"
+  },
+  {
+    "id": "777bb8665bf940fca9047435bbe22c83",
+    "path": "/api/microsites/by-slug/northstar-logistics-6476f0",
+    "method": "GET",
+    "status_code": 404,
+    "duration_ms": 0.74,
+    "occurred_at": "2026-04-19T06:32:44.105783+00:00"
+  },
+  {
+    "id": "093ed47ce68c4f9380e11269c8eb316d",
+    "path": "/api/microsites/by-slug/northstar-logistics-6476f0",
+    "method": "GET",
+    "status_code": 404,
+    "duration_ms": 0.95,
+    "occurred_at": "2026-04-19T06:32:44.103446+00:00"
+  },
+  {
+    "id": "f7ca193d612a49de9fd7eec079527b93",
+    "path": "/api/observability/requests",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.92,
+    "occurred_at": "2026-04-19T06:32:37.037182+00:00"
+  },
+  {
+    "id": "832921e6e4264e6e960c03659086c09a",
+    "path": "/api/observability/runs",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.37,
+    "occurred_at": "2026-04-19T06:32:37.036784+00:00"
+  },
+  {
+    "id": "0a2dd30ac4024bb48e41ddcc196f5cb9",
+    "path": "/api/observability/requests",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 2.97,
+    "occurred_at": "2026-04-19T06:32:37.032857+00:00"
+  },
+  {
+    "id": "73fa70c5b4ef4cb3a6564eb85712d934",
+    "path": "/api/observability/runs",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 2.85,
+    "occurred_at": "2026-04-19T06:32:37.032260+00:00"
+  },
+  {
+    "id": "bee0aad4271e4c90a9c18921318f9d6d",
+    "path": "/api/microsites/generate-batch",
+    "method": "OPTIONS",
+    "status_code": 200,
+    "duration_ms": 0.24,
+    "occurred_at": "2026-04-19T06:32:33.238750+00:00"
+  },
+  {
+    "id": "4beb036d52954b3c8e84f66998e81297",
+    "path": "/api/health",
+    "method": "GET",
+    "status_code": 200,
+    "duration_ms": 1.57,
+    "occurred_at": "2026-04-19T06:30:34.038994+00:00"
+  },
+  {
     "id": "9134b94ee8354219832b7d0265159071",
     "path": "/api/health",
     "method": "GET",

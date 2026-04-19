@@ -1,5 +1,265 @@
 [
   {
+    "id": "7392ff140f9a4e2096fad3b5b056d8c6",
+    "company_name": "Blue Atlas Energy",
+    "status": "completed",
+    "started_at": "2026-04-19T06:32:42.484507+00:00",
+    "completed_at": "2026-04-19T06:32:44.688300+00:00",
+    "total_duration_ms": 2203.78,
+    "model_name": "gpt-4.1-mini-2025-04-14",
+    "prompt_preview": "You are generating a lightweight but visually distinctive outbound sales microsite. Create clean first-touch copy for a single prospect company. Do not invent private facts, internal initiatives, or unverified stakeholder pain. Keep the cop",
+    "input_tokens": 296,
+    "output_tokens": 253,
+    "total_tokens": 549,
+    "llm_duration_ms": 2201.49,
+    "microsite_slug": "blue-atlas-energy-7ab844",
+    "error": null,
+    "steps": [
+      {
+        "name": "collect_mcp_context",
+        "status": "skipped",
+        "started_at": "2026-04-19T06:32:42.485486+00:00",
+        "ended_at": "2026-04-19T06:32:42.485921+00:00",
+        "duration_ms": 0.44,
+        "metadata": {
+          "server_names": [],
+          "tool_names": [],
+          "context_chars": 0
+        }
+      },
+      {
+        "name": "prepare_prompt",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:42.486198+00:00",
+        "ended_at": "2026-04-19T06:32:42.486202+00:00",
+        "duration_ms": 0.0,
+        "metadata": {
+          "company_name": "Blue Atlas Energy",
+          "uses_mcp_context": false,
+          "mcp_server_names": []
+        }
+      },
+      {
+        "name": "generate_content",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:42.486343+00:00",
+        "ended_at": "2026-04-19T06:32:44.687841+00:00",
+        "duration_ms": 2201.49,
+        "metadata": {
+          "model_name": "gpt-4.1-mini-2025-04-14",
+          "input_tokens": 296,
+          "output_tokens": 253,
+          "total_tokens": 549
+        }
+      },
+      {
+        "name": "finalize_microsite",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:44.688121+00:00",
+        "ended_at": "2026-04-19T06:32:44.688178+00:00",
+        "duration_ms": 0.06,
+        "metadata": {
+          "slug": "blue-atlas-energy-7ab844"
+        }
+      }
+    ]
+  },
+  {
+    "id": "6a00d37b193543df819a47c3cdb84284",
+    "company_name": "Juniper Health",
+    "status": "completed",
+    "started_at": "2026-04-19T06:32:40.385995+00:00",
+    "completed_at": "2026-04-19T06:32:42.482772+00:00",
+    "total_duration_ms": 2096.78,
+    "model_name": "gpt-4.1-mini-2025-04-14",
+    "prompt_preview": "You are generating a lightweight but visually distinctive outbound sales microsite. Create clean first-touch copy for a single prospect company. Do not invent private facts, internal initiatives, or unverified stakeholder pain. Keep the cop",
+    "input_tokens": 296,
+    "output_tokens": 218,
+    "total_tokens": 514,
+    "llm_duration_ms": 2094.4,
+    "microsite_slug": "juniper-health-366a7b",
+    "error": null,
+    "steps": [
+      {
+        "name": "collect_mcp_context",
+        "status": "skipped",
+        "started_at": "2026-04-19T06:32:40.386316+00:00",
+        "ended_at": "2026-04-19T06:32:40.386775+00:00",
+        "duration_ms": 0.46,
+        "metadata": {
+          "server_names": [],
+          "tool_names": [],
+          "context_chars": 0
+        }
+      },
+      {
+        "name": "prepare_prompt",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:40.387041+00:00",
+        "ended_at": "2026-04-19T06:32:40.387045+00:00",
+        "duration_ms": 0.0,
+        "metadata": {
+          "company_name": "Juniper Health",
+          "uses_mcp_context": false,
+          "mcp_server_names": []
+        }
+      },
+      {
+        "name": "generate_content",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:40.387194+00:00",
+        "ended_at": "2026-04-19T06:32:42.481602+00:00",
+        "duration_ms": 2094.4,
+        "metadata": {
+          "model_name": "gpt-4.1-mini-2025-04-14",
+          "input_tokens": 296,
+          "output_tokens": 218,
+          "total_tokens": 514
+        }
+      },
+      {
+        "name": "finalize_microsite",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:42.482252+00:00",
+        "ended_at": "2026-04-19T06:32:42.482433+00:00",
+        "duration_ms": 0.18,
+        "metadata": {
+          "slug": "juniper-health-366a7b"
+        }
+      }
+    ]
+  },
+  {
+    "id": "c560493795934894a692e0d39ac46bb0",
+    "company_name": "Acme Capital",
+    "status": "completed",
+    "started_at": "2026-04-19T06:32:36.722088+00:00",
+    "completed_at": "2026-04-19T06:32:40.385393+00:00",
+    "total_duration_ms": 3663.3,
+    "model_name": "gpt-4.1-mini-2025-04-14",
+    "prompt_preview": "You are generating a lightweight but visually distinctive outbound sales microsite. Create clean first-touch copy for a single prospect company. Do not invent private facts, internal initiatives, or unverified stakeholder pain. Keep the cop",
+    "input_tokens": 296,
+    "output_tokens": 232,
+    "total_tokens": 528,
+    "llm_duration_ms": 3661.75,
+    "microsite_slug": "acme-capital-f45973",
+    "error": null,
+    "steps": [
+      {
+        "name": "collect_mcp_context",
+        "status": "skipped",
+        "started_at": "2026-04-19T06:32:36.722499+00:00",
+        "ended_at": "2026-04-19T06:32:36.722809+00:00",
+        "duration_ms": 0.31,
+        "metadata": {
+          "server_names": [],
+          "tool_names": [],
+          "context_chars": 0
+        }
+      },
+      {
+        "name": "prepare_prompt",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:36.722953+00:00",
+        "ended_at": "2026-04-19T06:32:36.722961+00:00",
+        "duration_ms": 0.01,
+        "metadata": {
+          "company_name": "Acme Capital",
+          "uses_mcp_context": false,
+          "mcp_server_names": []
+        }
+      },
+      {
+        "name": "generate_content",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:36.723084+00:00",
+        "ended_at": "2026-04-19T06:32:40.384840+00:00",
+        "duration_ms": 3661.75,
+        "metadata": {
+          "model_name": "gpt-4.1-mini-2025-04-14",
+          "input_tokens": 296,
+          "output_tokens": 232,
+          "total_tokens": 528
+        }
+      },
+      {
+        "name": "finalize_microsite",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:40.385189+00:00",
+        "ended_at": "2026-04-19T06:32:40.385260+00:00",
+        "duration_ms": 0.07,
+        "metadata": {
+          "slug": "acme-capital-f45973"
+        }
+      }
+    ]
+  },
+  {
+    "id": "4e4074e69ca44093a269e6831b507c9a",
+    "company_name": "Northstar Logistics",
+    "status": "completed",
+    "started_at": "2026-04-19T06:32:33.242325+00:00",
+    "completed_at": "2026-04-19T06:32:36.721477+00:00",
+    "total_duration_ms": 3479.15,
+    "model_name": "gpt-4.1-mini-2025-04-14",
+    "prompt_preview": "You are generating a lightweight but visually distinctive outbound sales microsite. Create clean first-touch copy for a single prospect company. Do not invent private facts, internal initiatives, or unverified stakeholder pain. Keep the cop",
+    "input_tokens": 296,
+    "output_tokens": 222,
+    "total_tokens": 518,
+    "llm_duration_ms": 3470.34,
+    "microsite_slug": "northstar-logistics-6476f0",
+    "error": null,
+    "steps": [
+      {
+        "name": "collect_mcp_context",
+        "status": "skipped",
+        "started_at": "2026-04-19T06:32:33.249280+00:00",
+        "ended_at": "2026-04-19T06:32:33.249840+00:00",
+        "duration_ms": 0.56,
+        "metadata": {
+          "server_names": [],
+          "tool_names": [],
+          "context_chars": 0
+        }
+      },
+      {
+        "name": "prepare_prompt",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:33.250184+00:00",
+        "ended_at": "2026-04-19T06:32:33.250188+00:00",
+        "duration_ms": 0.0,
+        "metadata": {
+          "company_name": "Northstar Logistics",
+          "uses_mcp_context": false,
+          "mcp_server_names": []
+        }
+      },
+      {
+        "name": "generate_content",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:33.250344+00:00",
+        "ended_at": "2026-04-19T06:32:36.720692+00:00",
+        "duration_ms": 3470.34,
+        "metadata": {
+          "model_name": "gpt-4.1-mini-2025-04-14",
+          "input_tokens": 296,
+          "output_tokens": 222,
+          "total_tokens": 518
+        }
+      },
+      {
+        "name": "finalize_microsite",
+        "status": "completed",
+        "started_at": "2026-04-19T06:32:36.721177+00:00",
+        "ended_at": "2026-04-19T06:32:36.721320+00:00",
+        "duration_ms": 0.14,
+        "metadata": {
+          "slug": "northstar-logistics-6476f0"
+        }
+      }
+    ]
+  },
+  {
     "id": "a7939733fc144c8e955d6078be31bd81",
     "company_name": "Helios Freight",
     "status": "completed",

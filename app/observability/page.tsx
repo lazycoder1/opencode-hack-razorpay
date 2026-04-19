@@ -91,68 +91,80 @@ export default function ObservabilityPage() {
   return (
     <main className="pageShell">
       <nav className="topbar">
-        <div className="brandMark">
-          <div className="brandGlyph">OB</div>
-          <div className="brandCopy">
-            <strong>Observability Deck</strong>
-            <span>Runs, prompts, and latency</span>
+        <div className="brand">
+          <div className="brandIcon">OB</div>
+          <div className="brandBlock">
+            <strong className="brandTitle">Observability</strong>
+            <span className="brandCaption">Runs, prompts, and latency</span>
           </div>
         </div>
-        <div className="topbarNav">
-          <Link href="/">Create</Link>
-          <Link href="/microsites">Microsites</Link>
+
+        <div className="navCluster">
+          <Link className="navLink" href="/">
+            Create
+          </Link>
+          <Link className="navLink" href="/microsites">
+            Microsites
+          </Link>
+          <Link className="navLink" href="/prompts">
+            Prompt Library
+          </Link>
         </div>
       </nav>
 
-      <section className="pageHeader">
+      <section className="pageIntro">
         <div>
-          <p className="eyebrow">Operator surface</p>
-          <h1 className="pageTitle">Keep the generation trail visible.</h1>
+          <p className="kicker">Operator view</p>
+          <h1 className="pageTitle">Inspect generation quality without leaving the product.</h1>
+          <p className="sectionText">The trace surface stays compact, list-detail, and useful for a mentor or operator who wants timing, prompt, and request evidence quickly.</p>
         </div>
-        <div className="heroMeta">
-          <div className="metaItem">
+
+        <div className="metricGrid metricGridThree compactMetrics">
+          <article className="metricCard">
             <span>Completed runs</span>
             <strong>{completedRuns}</strong>
-          </div>
-          <div className="metaItem">
+          </article>
+          <article className="metricCard">
             <span>Failed runs</span>
             <strong>{failedRuns}</strong>
-          </div>
-          <div className="metaItem">
-            <span>Avg request latency</span>
+          </article>
+          <article className="metricCard">
+            <span>Avg latency</span>
             <strong>{averageLatency?.toFixed(1) ?? "-"} ms</strong>
-          </div>
+          </article>
         </div>
       </section>
 
       {error ? <p className="errorText">{error}</p> : null}
 
-      <section className="operatorGrid">
-        <aside className="operatorRail">
-          <div className="panelHeader">
-            <p className="eyebrowCool">Runs</p>
-            <p className="bodyText">Select a generation trace to inspect duration, token usage, prompt preview, and step timings.</p>
+      <section className="opsGrid">
+        <aside className="panel selectorPanel">
+          <div className="panelHeader compactHeader">
+            <div>
+              <p className="kicker">Runs</p>
+              <h2 className="sectionTitle">Generation history</h2>
+            </div>
           </div>
 
           {runs.length === 0 ? (
-            <div className="emptyState">
+            <div className="emptyPanel">
               <p>No runs captured yet.</p>
             </div>
           ) : (
-            <div className="selectionList">
+            <div className="selectorList">
               {runs.map((run) => (
                 <button
                   key={run.id}
-                  className={`runButton ${run.id === selectedRun?.id ? "active" : ""}`}
+                  className={`selectorButton ${run.id === selectedRun?.id ? "active" : ""}`}
                   onClick={() => setSelectedRunId(run.id)}
                   type="button"
                 >
-                  <div>
+                  <div className="selectorTop">
                     <span>{run.status}</span>
-                    <strong>{run.company_name}</strong>
-                    <p>{new Date(run.started_at).toLocaleString()}</p>
+                    <strong>{run.total_duration_ms?.toFixed(0) ?? "-"} ms</strong>
                   </div>
-                  <strong>{run.total_duration_ms?.toFixed(0) ?? "-"} ms</strong>
+                  <strong className="selectorTitle">{run.company_name}</strong>
+                  <p>{new Date(run.started_at).toLocaleString()}</p>
                 </button>
               ))}
             </div>
@@ -160,25 +172,23 @@ export default function ObservabilityPage() {
         </aside>
 
         {!selectedRun ? (
-          <div className="emptyState">
-            <p>Select a run once traces are available.</p>
+          <div className="emptyPanel">
+            <p>Select a run when generation records are available.</p>
           </div>
         ) : (
-          <section className="operatorLayout">
-            <article className="operatorDetail">
-              <div className="operatorMeta">
+          <section className="detailStack">
+            <article className="panel detailPanel">
+              <div className="previewHeader">
                 <div>
-                  <p className="eyebrowCool">Run detail</p>
-                  <h2 className="spotlightTitle">{selectedRun.company_name}</h2>
+                  <p className="kicker">Selected run</p>
+                  <h2 className="sectionTitle">{selectedRun.company_name}</h2>
                 </div>
-                <div className="statusPills">
-                  <div className={`statusPill ${selectedRun.status === "completed" ? "success" : "danger"}`}>
-                    {selectedRun.status}
-                  </div>
-                </div>
+                <span className={`statusChip ${selectedRun.status === "completed" ? "statusReady" : "statusError"}`}>
+                  {selectedRun.status}
+                </span>
               </div>
 
-              <div className="metricsRow metricGrid">
+              <div className="metricGrid metricGridThree compactMetrics">
                 <article className="metricCard">
                   <span>Total duration</span>
                   <strong>{selectedRun.total_duration_ms?.toFixed(2) ?? "-"} ms</strong>
@@ -193,86 +203,93 @@ export default function ObservabilityPage() {
                 </article>
               </div>
 
-              <div className="operatorStacks">
-                <div className="requestStack">
-                  <article className="metricCard">
-                    <span>Model</span>
-                    <strong>{selectedRun.model_name ?? "-"}</strong>
-                  </article>
-                  <article className="metricCard">
-                    <span>Prompt tokens</span>
-                    <strong>{selectedRun.input_tokens ?? "-"}</strong>
-                  </article>
-                  <article className="metricCard">
-                    <span>Output tokens</span>
-                    <strong>{selectedRun.output_tokens ?? "-"}</strong>
-                  </article>
-                </div>
+              <div className="metricGrid metricGridThree compactMetrics">
+                <article className="metricCard">
+                  <span>Model</span>
+                  <strong>{selectedRun.model_name ?? "-"}</strong>
+                </article>
+                <article className="metricCard">
+                  <span>Prompt tokens</span>
+                  <strong>{selectedRun.input_tokens ?? "-"}</strong>
+                </article>
+                <article className="metricCard">
+                  <span>Output tokens</span>
+                  <strong>{selectedRun.output_tokens ?? "-"}</strong>
+                </article>
+              </div>
 
-                {selectedRun.prompt_preview ? (
-                  <div className="promptPreview">
-                    <p className="eyebrow">Prompt preview</p>
-                    <p className="operatorBody">{selectedRun.prompt_preview}</p>
-                  </div>
-                ) : (
-                  <div className="promptPreview">
-                    <p className="eyebrow">Prompt preview</p>
-                    <p className="operatorBody">No prompt preview captured for this run.</p>
-                  </div>
-                )}
+              <div className="promptPanel">
+                <p className="miniLabel">Prompt preview</p>
+                <p>
+                  {selectedRun.prompt_preview ??
+                    "No prompt preview captured for this run."}
+                </p>
               </div>
 
               {selectedRun.error ? <p className="errorText">{selectedRun.error}</p> : null}
 
-              <div className="timelineList">
-                {selectedRun.steps.map((step) => (
-                  <article className="stepCard" key={`${step.name}-${step.started_at}`}>
-                    <div className="stepTop">
-                      <strong>{step.name}</strong>
-                      <time>{step.duration_ms.toFixed(2)} ms</time>
-                    </div>
-                    <p className="summaryTime">{step.status}</p>
-                    {Object.keys(step.metadata).length > 0 ? (
-                      <pre className="stepMeta">{JSON.stringify(step.metadata, null, 2)}</pre>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
-
               {selectedRun.microsite_slug ? (
-                <div className="stackActions">
+                <div className="actionRow">
                   <Link className="buttonPrimary" href={`/microsites/${selectedRun.microsite_slug}`}>
                     Open generated microsite
                   </Link>
-                  <Link className="buttonGhost" href="/microsites">
-                    Back to microsite library
+                  <Link className="buttonSecondary" href="/microsites">
+                    Back to library
                   </Link>
                 </div>
               ) : null}
             </article>
 
-            <article className="panel">
-              <div className="panelHeader">
-                <p className="eyebrow">API ledger</p>
-                <h2 className="spotlightTitle">Latest backend requests</h2>
-              </div>
+            <div className="splitDetailGrid">
+              <article className="panel detailPanel">
+                <div className="panelHeader compactHeader">
+                  <div>
+                    <p className="kicker">Step trace</p>
+                    <h2 className="sectionTitle">Pipeline timings</h2>
+                  </div>
+                </div>
 
-              <div className="requestStack">
-                {requests.map((request) => (
-                  <article className="requestCard" key={request.id}>
-                    <div>
-                      <p className="summaryLabel">{request.method}</p>
-                      <strong>{request.path}</strong>
-                      <time>{new Date(request.occurred_at).toLocaleString()}</time>
-                    </div>
-                    <div className="requestStats">
-                      <span>Status {request.status_code}</span>
-                      <strong>{request.duration_ms.toFixed(2)} ms</strong>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </article>
+                <div className="stepList">
+                  {selectedRun.steps.map((step) => (
+                    <article className="stepItem" key={`${step.name}-${step.started_at}`}>
+                      <div className="stepHead">
+                        <strong>{step.name}</strong>
+                        <span>{step.duration_ms.toFixed(2)} ms</span>
+                      </div>
+                      <p className="stepStatus">{step.status}</p>
+                      {Object.keys(step.metadata).length > 0 ? (
+                        <pre className="stepMeta">{JSON.stringify(step.metadata, null, 2)}</pre>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              </article>
+
+              <article className="panel detailPanel">
+                <div className="panelHeader compactHeader">
+                  <div>
+                    <p className="kicker">Request ledger</p>
+                    <h2 className="sectionTitle">Latest backend calls</h2>
+                  </div>
+                </div>
+
+                <div className="requestList">
+                  {requests.map((request) => (
+                    <article className="requestItem" key={request.id}>
+                      <div className="requestInfo">
+                        <p className="miniLabel">{request.method}</p>
+                        <strong>{request.path}</strong>
+                        <p>{new Date(request.occurred_at).toLocaleString()}</p>
+                      </div>
+                      <div className="requestMeta">
+                        <span>Status {request.status_code}</span>
+                        <strong>{request.duration_ms.toFixed(2)} ms</strong>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </article>
+            </div>
           </section>
         )}
       </section>

@@ -28,6 +28,7 @@ DATA_DIR = BASE_DIR / "data"
 MICROSITES_PATH = DATA_DIR / "microsites.json"
 RUNS_PATH = DATA_DIR / "generation_runs.json"
 REQUESTS_PATH = DATA_DIR / "api_requests.json"
+PROMPTS_PATH = DATA_DIR / "prompts.json"
 
 load_dotenv(BASE_DIR / ".env.local")
 load_dotenv(BASE_DIR / ".env.prod")
@@ -38,6 +39,37 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 class GenerateMicrositesRequest(BaseModel):
     prospects: list[str] = Field(default_factory=list)
+
+
+class PromptLibraryItem(BaseModel):
+    id: str
+    name: str
+    slug: str
+    stage: str
+    description: str = ""
+    content: str
+    is_active: bool = False
+    created_at: str
+    updated_at: str
+
+
+class PromptLibraryCreateRequest(BaseModel):
+    name: str
+    stage: str
+    description: str = ""
+    content: str
+
+
+class PromptLibraryUpdateRequest(BaseModel):
+    name: str
+    stage: str
+    description: str = ""
+    content: str
+
+
+class PromptActivationResponse(BaseModel):
+    prompt: PromptLibraryItem
+    stage: str
 
 
 class MicrositeTheme(BaseModel):
@@ -136,7 +168,48 @@ class GenerationState(TypedDict, total=False):
     model_name: str
     llm_duration_ms: float
     microsite: dict[str, Any]
+    prompt_library_item_id: str
+    prompt_library_item_name: str
+    mcp_prompt_library_item_id: str
+    mcp_prompt_library_item_name: str
     error: str
+
+
+PROMPT_STAGES = {"mcp_research", "microsite_generation"}
+
+DEFAULT_PROMPTS = [
+    {
+        "name": "Default MCP Research",
+        "slug": "default-mcp-research",
+        "stage": "mcp_research",
+        "description": "Default web research brief for collecting safe public context.",
+        "content": (
+            "You are gathering concise external context for a first-touch outbound microsite. "
+            "Use the available MCP tools to research the prospect company and return only grounded, publicly supportable details. "
+            "The prospect company is: {{company_name}}. "
+            "Return a short plain-text brief with: company summary, notable public signals, credible themes for personalization, "
+            "and unknowns that should not be claimed. Do not invent specifics."
+        ),
+        "is_active": True,
+    },
+    {
+        "name": "Default Microsite Generation",
+        "slug": "default-microsite-generation",
+        "stage": "microsite_generation",
+        "description": "Default generation prompt for first-touch graphical microsites.",
+        "content": (
+            "You are generating a lightweight but visually distinctive outbound sales microsite. "
+            "Create clean first-touch copy for a single prospect company. "
+            "Do not invent private facts, internal initiatives, or unverified stakeholder pain. "
+            "Keep the copy credible, discovery-oriented, and ready to be upgraded by a future research layer. "
+            "The prospect company is: {{company_name}}. "
+            "Return a visually memorable microsite package with a strong headline, concise summary, CTA, 3 stats, "
+            "a visual direction sentence, and 3 to 4 short sections."
+            "{{mcp_context_block}}"
+        ),
+        "is_active": True,
+    },
+]
 
 
 PALETTES = [
@@ -195,7 +268,7 @@ def utc_now_iso() -> str:
 
 def ensure_storage() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    for path in (MICROSITES_PATH, RUNS_PATH, REQUESTS_PATH):
+    for path in (MICROSITES_PATH, RUNS_PATH, REQUESTS_PATH, PROMPTS_PATH):
         if not path.exists():
             path.write_text("[]", encoding="utf-8")
 
@@ -230,6 +303,14 @@ def load_request_events() -> list[ApiRequestEvent]:
     return [ApiRequestEvent.model_validate(item) for item in load_json_list(REQUESTS_PATH)]
 
 
+def load_prompts() -> list[PromptLibraryItem]:
+    return [PromptLibraryItem.model_validate(item) for item in load_json_list(PROMPTS_PATH)]
+
+
+def save_prompts(records: list[PromptLibraryItem]) -> None:
+    save_json_list(PROMPTS_PATH, [record.model_dump() for record in records])
+
+
 def save_request_events(records: list[ApiRequestEvent]) -> None:
     save_json_list(REQUESTS_PATH, [record.model_dump() for record in records])
 
@@ -238,6 +319,87 @@ def append_request_event(event: ApiRequestEvent) -> None:
     events = load_request_events()
     events = [event, *events][:250]
     save_request_events(events)
+
+
+def ensure_default_prompts() -> None:
+    prompts = load_prompts()
+    if prompts:
+        return
+
+    now = utc_now_iso()
+    seeded = [
+        PromptLibraryItem(
+            id=uuid4().hex,
+            name=item["name"],
+            slug=item["slug"],
+            stage=item["stage"],
+            description=item["description"],
+            content=item["content"],
+            is_active=item["is_active"],
+            created_at=now,
+            updated_at=now,
+        )
+        for item in DEFAULT_PROMPTS
+    ]
+    save_prompts(seeded)
+
+
+def normalize_prompt_stage(stage: str) -> str:
+    normalized = stage.strip().lower().replace(" ", "_")
+    if normalized not in PROMPT_STAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported prompt stage '{stage}'")
+    return normalized
+
+
+def set_active_prompt_for_stage(stage: str, prompt_id: str) -> PromptLibraryItem:
+    prompts = load_prompts()
+    activated: PromptLibraryItem | None = None
+    updated: list[PromptLibraryItem] = []
+
+    for prompt in prompts:
+        should_activate = prompt.id == prompt_id and prompt.stage == stage
+        next_prompt = prompt.model_copy(
+            update={
+                "is_active": should_activate if prompt.stage == stage else prompt.is_active,
+                "updated_at": utc_now_iso() if should_activate or (prompt.stage == stage and prompt.is_active) else prompt.updated_at,
+            }
+        )
+        updated.append(next_prompt)
+        if should_activate:
+            activated = next_prompt
+
+    if activated is None:
+        raise HTTPException(status_code=404, detail=f"Prompt '{prompt_id}' was not found for stage '{stage}'")
+
+    save_prompts(updated)
+    return activated
+
+
+def get_active_prompt(stage: str) -> PromptLibraryItem:
+    prompts = load_prompts()
+    for prompt in prompts:
+        if prompt.stage == stage and prompt.is_active:
+            return prompt
+
+    for item in DEFAULT_PROMPTS:
+        if item["stage"] == stage:
+            now = utc_now_iso()
+            fallback = PromptLibraryItem(
+                id=uuid4().hex,
+                name=item["name"],
+                slug=item["slug"],
+                stage=item["stage"],
+                description=item["description"],
+                content=item["content"],
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            )
+            prompts.append(fallback)
+            save_prompts(prompts)
+            return fallback
+
+    raise HTTPException(status_code=404, detail=f"No active prompt configured for stage '{stage}'")
 
 
 def slugify(value: str) -> str:
@@ -276,6 +438,13 @@ def make_step(name: str, started_at: str, start_perf: float, status: str, metada
 
 def get_openai_model_name() -> str:
     return os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+
+
+def render_prompt_template(template: str, values: dict[str, str]) -> str:
+    rendered = template
+    for key, value in values.items():
+        rendered = rendered.replace(f"{{{{{key}}}}}", value)
+    return rendered
 
 
 @lru_cache(maxsize=1)
@@ -324,37 +493,32 @@ def get_llm() -> ChatOpenAI:
     return ChatOpenAI(model=get_openai_model_name(), api_key=api_key, temperature=0.9)
 
 
-def build_prompt(company_name: str, mcp_context: str = "") -> str:
-    prompt = (
-        "You are generating a lightweight but visually distinctive outbound sales microsite. "
-        "Create clean first-touch copy for a single prospect company. "
-        "Do not invent private facts, internal initiatives, or unverified stakeholder pain. "
-        "Keep the copy credible, discovery-oriented, and ready to be upgraded by a future research layer. "
-        f"The prospect company is: {company_name}. "
-        "Return a visually memorable microsite package with a strong headline, concise summary, CTA, 3 stats, "
-        "a visual direction sentence, and 3 to 4 short sections."
+def build_prompt(company_name: str, mcp_context: str = "") -> tuple[str, PromptLibraryItem]:
+    prompt_item = get_active_prompt("microsite_generation")
+    context_block = ""
+    if mcp_context.strip():
+        context_block = (
+            " Use the external context below only when it is relevant and clearly supported by public evidence. "
+            "If the context is incomplete or inconclusive, stay general instead of overstating certainty.\n\n"
+            "External context:\n"
+            f"{mcp_context.strip()}"
+        )
+
+    prompt = render_prompt_template(
+        prompt_item.content,
+        {
+            "company_name": company_name,
+            "mcp_context": mcp_context.strip(),
+            "mcp_context_block": context_block,
+        },
     )
-
-    if not mcp_context.strip():
-        return prompt
-
-    return (
-        f"{prompt} "
-        "Use the external context below only when it is relevant and clearly supported by public evidence. "
-        "If the context is incomplete or inconclusive, stay general instead of overstating certainty.\n\n"
-        "External context:\n"
-        f"{mcp_context.strip()}"
-    )
+    return prompt, prompt_item
 
 
-def build_mcp_research_prompt(company_name: str) -> str:
-    return (
-        "You are gathering concise external context for a first-touch outbound microsite. "
-        "Use the available MCP tools to research the prospect company and return only grounded, publicly supportable details. "
-        f"The prospect company is: {company_name}. "
-        "Return a short plain-text brief with: company summary, notable public signals, credible themes for personalization, "
-        "and unknowns that should not be claimed. Do not invent specifics."
-    )
+def build_mcp_research_prompt(company_name: str) -> tuple[str, PromptLibraryItem]:
+    prompt_item = get_active_prompt("mcp_research")
+    prompt = render_prompt_template(prompt_item.content, {"company_name": company_name})
+    return prompt, prompt_item
 
 
 def stringify_message_content(content: Any) -> str:
@@ -405,13 +569,14 @@ async def collect_mcp_context(company_name: str) -> dict[str, Any]:
             "tool_names": [],
         }
 
+    prompt, prompt_item = build_mcp_research_prompt(company_name)
     agent = create_agent(f"openai:{get_openai_model_name()}", tools)
     result = await agent.ainvoke(
         {
             "messages": [
                 {
                     "role": "user",
-                    "content": build_mcp_research_prompt(company_name),
+                    "content": prompt,
                 }
             ]
         }
@@ -420,6 +585,8 @@ async def collect_mcp_context(company_name: str) -> dict[str, Any]:
         "context": extract_agent_text(result),
         "server_names": list(server_config.keys()),
         "tool_names": [getattr(tool, "name", "unknown") for tool in tools],
+        "prompt_item_id": prompt_item.id,
+        "prompt_item_name": prompt_item.name,
     }
 
 
@@ -459,12 +626,15 @@ def collect_mcp_context_node(state: GenerationState) -> GenerationState:
                     "server_names": context_payload["server_names"],
                     "tool_names": context_payload["tool_names"],
                     "context_chars": len(context_payload["context"]),
+                    "prompt_item_name": context_payload.get("prompt_item_name"),
                 },
             )
         )
         return {
             "mcp_context": context_payload["context"],
             "mcp_server_names": context_payload["server_names"],
+            "mcp_prompt_library_item_id": context_payload.get("prompt_item_id"),
+            "mcp_prompt_library_item_name": context_payload.get("prompt_item_name"),
             "steps": steps,
         }
     except Exception as exc:
@@ -480,7 +650,7 @@ def collect_mcp_context_node(state: GenerationState) -> GenerationState:
 def prepare_prompt_node(state: GenerationState) -> GenerationState:
     started_at = utc_now_iso()
     start_perf = time.perf_counter()
-    prompt = build_prompt(state["company_name"], state.get("mcp_context", ""))
+    prompt, prompt_item = build_prompt(state["company_name"], state.get("mcp_context", ""))
     step = make_step(
         "prepare_prompt",
         started_at,
@@ -490,11 +660,14 @@ def prepare_prompt_node(state: GenerationState) -> GenerationState:
             "company_name": state["company_name"],
             "uses_mcp_context": bool(state.get("mcp_context", "").strip()),
             "mcp_server_names": state.get("mcp_server_names", []),
+            "prompt_item_name": prompt_item.name,
         },
     )
     return {
         "prompt": prompt,
         "prompt_preview": prompt[:240],
+        "prompt_library_item_id": prompt_item.id,
+        "prompt_library_item_name": prompt_item.name,
         "steps": [*state.get("steps", []), step],
     }
 
@@ -668,6 +841,7 @@ async def log_request_latency(request: Request, call_next):
 @app.on_event("startup")
 def on_startup() -> None:
     ensure_storage()
+    ensure_default_prompts()
 
 
 @app.get("/api/health")
@@ -683,6 +857,7 @@ def health() -> dict[str, Any]:
         "status": "ok",
         "microsites": len(load_microsites()),
         "runs": len(load_runs()),
+        "prompts": len(load_prompts()),
         "model": get_openai_model_name(),
         "langsmith_tracing": os.getenv("LANGSMITH_TRACING", "false"),
         "mcp_enabled": bool(mcp_servers),
@@ -706,6 +881,85 @@ def mcp_status() -> dict[str, Any]:
             "servers": [],
             "config_error": str(exc),
         }
+
+
+@app.get("/api/prompts", response_model=list[PromptLibraryItem])
+def list_prompts() -> list[PromptLibraryItem]:
+    return load_prompts()
+
+
+@app.post("/api/prompts", response_model=PromptLibraryItem, status_code=201)
+def create_prompt(request: PromptLibraryCreateRequest) -> PromptLibraryItem:
+    stage = normalize_prompt_stage(request.stage)
+    prompts = load_prompts()
+    now = utc_now_iso()
+    prompt = PromptLibraryItem(
+        id=uuid4().hex,
+        name=request.name.strip(),
+        slug=f"{slugify(request.name)}-{uuid4().hex[:6]}",
+        stage=stage,
+        description=request.description.strip(),
+        content=request.content,
+        is_active=False,
+        created_at=now,
+        updated_at=now,
+    )
+    prompts = [prompt, *prompts]
+    save_prompts(prompts)
+    return prompt
+
+
+@app.put("/api/prompts/{prompt_id}", response_model=PromptLibraryItem)
+def update_prompt(prompt_id: str, request: PromptLibraryUpdateRequest) -> PromptLibraryItem:
+    stage = normalize_prompt_stage(request.stage)
+    prompts = load_prompts()
+    updated: PromptLibraryItem | None = None
+    next_prompts: list[PromptLibraryItem] = []
+
+    for prompt in prompts:
+        if prompt.id != prompt_id:
+            next_prompts.append(prompt)
+            continue
+
+        updated = prompt.model_copy(
+            update={
+                "name": request.name.strip(),
+                "stage": stage,
+                "description": request.description.strip(),
+                "content": request.content,
+                "updated_at": utc_now_iso(),
+            }
+        )
+        next_prompts.append(updated)
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Prompt '{prompt_id}' was not found")
+
+    save_prompts(next_prompts)
+    return updated
+
+
+@app.post("/api/prompts/{prompt_id}/activate", response_model=PromptActivationResponse)
+def activate_prompt(prompt_id: str) -> PromptActivationResponse:
+    prompts = load_prompts()
+    target = next((prompt for prompt in prompts if prompt.id == prompt_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"Prompt '{prompt_id}' was not found")
+
+    activated = set_active_prompt_for_stage(target.stage, target.id)
+    return PromptActivationResponse(prompt=activated, stage=activated.stage)
+
+
+@app.delete("/api/prompts/{prompt_id}", status_code=204)
+def delete_prompt(prompt_id: str) -> None:
+    prompts = load_prompts()
+    target = next((prompt for prompt in prompts if prompt.id == prompt_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"Prompt '{prompt_id}' was not found")
+    if target.is_active:
+        raise HTTPException(status_code=400, detail="Active prompts cannot be deleted")
+
+    save_prompts([prompt for prompt in prompts if prompt.id != prompt_id])
 
 
 @app.post("/api/microsites/generate-batch", response_model=GenerateMicrositesResponse)
