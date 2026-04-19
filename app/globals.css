@@ -1359,6 +1359,68 @@ button {
   to { transform: rotate(360deg); }
 }
 
+.stageList {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.stagePanel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.stageExpanded {
+  border-color: rgba(139, 125, 255, 0.28);
+}
+
+.stageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 16px 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.stageHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.stageChevron {
+  font-size: 1.2rem;
+  color: var(--muted);
+}
+
+.stageBody {
+  display: grid;
+  gap: 14px;
+  padding: 0 20px 20px;
+}
+
+.stagePromptGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.stageTextarea {
+  min-height: 200px;
+  font-size: 0.8rem;
+}
+
+.stageResult {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
 .sandboxResearchGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

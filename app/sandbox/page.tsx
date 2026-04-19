@@ -1,53 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
-const DEFAULT_SKILL = `You are a world-class frontend designer and developer. You create distinctive, production-grade HTML microsites with exceptional attention to aesthetic details and creative choices.
+type StageKey = "manager_plan" | "seller_research" | "prospect_research" | "manager_review" | "generate_microsite";
 
-## Design Thinking
-
-Before coding, commit to a BOLD aesthetic direction:
-- Purpose: This is a first-touch sales microsite for an outbound campaign.
-- Tone: Choose a clear visual direction that fits the brand pairing. Not generic, not templated.
-- Differentiation: What makes this UNFORGETTABLE? One thing someone will remember.
-
-## Output Format
-
-Return ONLY a single, complete, self-contained HTML document. No markdown fences, no explanation, no preamble. Just the raw HTML starting with <!DOCTYPE html>.
-
-The HTML must:
-- Be a complete standalone page (inline all CSS, no external dependencies except Google Fonts)
-- Include responsive design
-- Use distinctive typography from Google Fonts (never Inter, Roboto, Arial)
-- Have a cohesive color palette with CSS variables
-- Include CSS animations for page load (staggered reveals, fade-ins)
-- Feel like a real designer made it, not a template
-
-## Frontend Aesthetics
-
-- Typography: Choose beautiful, unique fonts. Pair a distinctive display font with a refined body font.
-- Color: Commit to a cohesive palette. Dominant colors with sharp accents.
-- Motion: CSS animations for load effects and micro-interactions. Staggered reveals create delight.
-- Spatial composition: Unexpected layouts. Asymmetry. Generous negative space OR controlled density.
-- Backgrounds: Create atmosphere with gradients, noise textures, geometric patterns, or grain overlays.
-
-NEVER use generic AI aesthetics. No purple gradients on white. No predictable layouts. Each site should feel genuinely designed for the specific brand pairing.`;
-
-const DEFAULT_PROMPT = `Create a sales microsite for a partnership pitch: {{source_company}} selling to {{company_name}}.
-
-The microsite should include:
-1. A bold hero section with a compelling headline about the {{source_company}} x {{company_name}} opportunity
-2. 3-4 key value propositions specific to what {{source_company}} can offer {{company_name}}
-3. Relevant stats or proof points grounded in the research provided
-4. A clear CTA section
-5. Footer with both brand marks referenced
-
-Make it feel premium and modern. The design should reflect the speed and scale of both companies.
-
-Remember: Return ONLY the raw HTML. No markdown, no code fences, no explanation.`;
+type PromptPair = { system: string; user: string };
 
 type AgentStep = {
   step_name: string;
@@ -81,36 +41,120 @@ type CouncilRun = {
   final_html: string;
 };
 
-const AGENT_LABELS: Record<string, string> = {
-  manager: "Manager",
-  seller_researcher: "Seller Researcher",
-  prospect_researcher: "Prospect Researcher",
-  generator: "Microsite Generator",
-};
-
-const STEP_LABELS: Record<string, string> = {
-  manager_plan: "Plan research",
-  seller_research: "Research seller",
-  prospect_research: "Research prospect",
-  manager_review: "Review research",
-  generate_microsite: "Generate HTML",
-};
+const STAGES: { key: StageKey; label: string; agent: string }[] = [
+  { key: "manager_plan", label: "1. Manager Plan", agent: "Manager" },
+  { key: "seller_research", label: "2. Seller Research", agent: "Seller Researcher" },
+  { key: "prospect_research", label: "3. Prospect Research", agent: "Prospect Researcher" },
+  { key: "manager_review", label: "4. Manager Review", agent: "Manager" },
+  { key: "generate_microsite", label: "5. Generate Microsite", agent: "Generator" },
+];
 
 export default function SandboxPage() {
-  const [skill, setSkill] = useState(DEFAULT_SKILL);
-  const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [prospect, setProspect] = useState("Zepto");
   const [sourceCompany, setSourceCompany] = useState("Razorpay");
+  const [prompts, setPrompts] = useState<Record<StageKey, PromptPair>>({
+    manager_plan: { system: "", user: "" },
+    seller_research: { system: "", user: "" },
+    prospect_research: { system: "", user: "" },
+    manager_review: { system: "", user: "" },
+    generate_microsite: { system: "", user: "" },
+  });
+  const [defaults, setDefaults] = useState<Record<string, PromptPair>>({});
+  const [expandedStage, setExpandedStage] = useState<StageKey | null>("manager_plan");
+  const [stageResults, setStageResults] = useState<Record<string, AgentStep>>({});
+  const [stageOutputs, setStageOutputs] = useState<Record<string, string>>({});
   const [run, setRun] = useState<CouncilRun | null>(null);
   const [loading, setLoading] = useState(false);
+  const [runningStage, setRunningStage] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<"preview" | "source" | "trace" | "research">("trace");
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  async function runCouncil() {
+  useEffect(() => {
+    fetch(`${apiBaseUrl}/api/council/default-prompts`)
+      .then((r) => r.json())
+      .then((data: Record<string, PromptPair>) => {
+        setDefaults(data);
+        setPrompts({
+          manager_plan: { ...data.manager_plan },
+          seller_research: { ...data.seller_research },
+          prospect_research: { ...data.prospect_research },
+          manager_review: { ...data.manager_review },
+          generate_microsite: { ...data.generate_microsite },
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  function updatePrompt(stage: StageKey, key: "system" | "user", value: string) {
+    setPrompts((prev) => ({ ...prev, [stage]: { ...prev[stage], [key]: value } }));
+  }
+
+  function resetStage(stage: StageKey) {
+    if (defaults[stage]) {
+      setPrompts((prev) => ({ ...prev, [stage]: { ...defaults[stage] } }));
+    }
+  }
+
+  async function runSingleStage(stage: StageKey) {
+    setRunningStage(stage);
+    setError("");
+
+    const context: Record<string, string> = {};
+    if (stageOutputs.generation_plan) context.generation_plan = stageOutputs.generation_plan;
+    if (stageOutputs.seller_research) context.seller_research = stageOutputs.seller_research;
+    if (stageOutputs.prospect_research) context.prospect_research = stageOutputs.prospect_research;
+    if (stageOutputs.review_notes) context.review_notes = stageOutputs.review_notes;
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/council/stage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage,
+          prospect,
+          source_company: sourceCompany,
+          system_prompt: prompts[stage].system,
+          user_prompt: prompts[stage].user,
+          context,
+        }),
+      });
+
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Stage failed (${response.status}): ${detail}`);
+      }
+
+      const stepResult: AgentStep = await response.json();
+      setStageResults((prev) => ({ ...prev, [stage]: stepResult }));
+
+      // Store output for downstream stages
+      const outputMap: Record<string, string> = {
+        manager_plan: "generation_plan",
+        seller_research: "seller_research",
+        prospect_research: "prospect_research",
+        manager_review: "review_notes",
+      };
+
+      if (outputMap[stage] && stepResult.output) {
+        setStageOutputs((prev) => ({ ...prev, [outputMap[stage]]: stepResult.output }));
+      }
+
+      // For generate_microsite, the output is HTML (but it's truncated in step.output)
+      // We need the full output from the run for preview
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Stage failed");
+    } finally {
+      setRunningStage(null);
+    }
+  }
+
+  async function runFullPipeline() {
     setLoading(true);
     setError("");
     setRun(null);
+    setStageResults({});
+    setStageOutputs({});
 
     try {
       const response = await fetch(`${apiBaseUrl}/api/council/run`, {
@@ -119,21 +163,47 @@ export default function SandboxPage() {
         body: JSON.stringify({
           prospect,
           source_company: sourceCompany,
-          skill_prompt: skill,
-          user_prompt_template: prompt,
+          stage_prompts: {
+            manager_plan_system: prompts.manager_plan.system,
+            manager_plan_user: prompts.manager_plan.user,
+            seller_research_system: prompts.seller_research.system,
+            seller_research_user: prompts.seller_research.user,
+            prospect_research_system: prompts.prospect_research.system,
+            prospect_research_user: prompts.prospect_research.user,
+            manager_review_system: prompts.manager_review.system,
+            manager_review_user: prompts.manager_review.user,
+            generator_system: prompts.generate_microsite.system,
+            generator_user: prompts.generate_microsite.user,
+          },
         }),
       });
 
       if (!response.ok) {
         const detail = await response.text();
-        throw new Error(`Council run failed (${response.status}): ${detail}`);
+        throw new Error(`Pipeline failed (${response.status}): ${detail}`);
       }
 
       const data: CouncilRun = await response.json();
       setRun(data);
+
+      // Populate stage outputs from the run
+      setStageOutputs({
+        generation_plan: data.generation_plan,
+        seller_research: data.seller_research,
+        prospect_research: data.prospect_research,
+        review_notes: data.review_notes,
+      });
+
+      // Populate per-stage results
+      const resultMap: Record<string, AgentStep> = {};
+      for (const step of data.steps) {
+        resultMap[step.step_name] = step;
+      }
+      setStageResults(resultMap);
+
       setViewMode(data.final_html ? "preview" : "trace");
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Council run failed");
+      setError(caughtError instanceof Error ? caughtError.message : "Pipeline failed");
     } finally {
       setLoading(false);
     }
@@ -145,28 +215,21 @@ export default function SandboxPage() {
         <div className="brand">
           <div className="brandIcon">CA</div>
           <div className="brandBlock">
-            <strong className="brandTitle">Council of Agents</strong>
-            <span className="brandCaption">Manager + researchers + generator</span>
+            <strong className="brandTitle">Council Sandbox</strong>
+            <span className="brandCaption">Edit and test every agent prompt</span>
           </div>
         </div>
-
         <div className="navCluster">
           <Link className="navLink" href="/">Create</Link>
           <Link className="navLink" href="/microsites">Microsites</Link>
-          <Link className="navLink" href="/prompts">Prompts</Link>
           <Link className="navLink" href="/observability">Observability</Link>
         </div>
       </nav>
 
       <section className="pageIntro">
         <div>
-          <p className="kicker">Agent council</p>
-          <h1 className="pageTitle">Manager plans, researchers investigate, generator builds.</h1>
-          <p className="sectionText">
-            The council runs 5 steps: Manager plans research, Seller Researcher and Prospect Researcher
-            run in parallel, Manager reviews quality, then the Generator produces a full HTML microsite
-            grounded in real research. Every step is traced with duration, tokens, and cost.
-          </p>
+          <p className="kicker">Prompt engineering</p>
+          <h1 className="pageTitle">Edit every agent prompt. Test each stage independently or run the full pipeline.</h1>
         </div>
       </section>
 
@@ -178,83 +241,32 @@ export default function SandboxPage() {
             <strong>Source company (seller)</strong>
             <span className="fieldHint">Who is pitching</span>
           </div>
-          <input
-            className="prospectInput sandboxInput"
-            value={sourceCompany}
-            onChange={(e) => setSourceCompany(e.target.value)}
-            placeholder="Razorpay"
-          />
+          <input className="prospectInput sandboxInput" value={sourceCompany} onChange={(e) => setSourceCompany(e.target.value)} />
         </label>
         <label className="fieldStack sandboxField">
           <div className="fieldTop">
             <strong>Prospect (target)</strong>
             <span className="fieldHint">Who is being pitched to</span>
           </div>
-          <input
-            className="prospectInput sandboxInput"
-            value={prospect}
-            onChange={(e) => setProspect(e.target.value)}
-            placeholder="Zepto"
-          />
+          <input className="prospectInput sandboxInput" value={prospect} onChange={(e) => setProspect(e.target.value)} />
         </label>
-      </section>
-
-      <section className="sandboxGrid">
-        <div className="panel sandboxEditor">
-          <div className="panelHeader compactHeader">
-            <div>
-              <p className="kicker">Generator skill</p>
-              <h2 className="sectionTitle">System prompt for the Generator agent</h2>
-            </div>
-            <span className="badge">Controls HTML output style</span>
-          </div>
-          <textarea
-            className="sandboxTextarea"
-            value={skill}
-            onChange={(e) => setSkill(e.target.value)}
-            placeholder="Skill/system prompt for the generator..."
-          />
-        </div>
-
-        <div className="panel sandboxEditor">
-          <div className="panelHeader compactHeader">
-            <div>
-              <p className="kicker">Generator prompt template</p>
-              <h2 className="sectionTitle">User prompt with research injected</h2>
-            </div>
-            <span className="badge">Research is appended automatically</span>
-          </div>
-          <textarea
-            className="sandboxTextarea sandboxTextareaShort"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="User prompt template..."
-          />
-        </div>
       </section>
 
       <section className="sandboxActions">
         <div className="actionRow">
-          <button
-            className="buttonPrimary"
-            type="button"
-            disabled={loading || !skill.trim() || !prompt.trim() || !prospect.trim() || !sourceCompany.trim()}
-            onClick={runCouncil}
-          >
-            {loading ? "Council running..." : "Run council pipeline"}
+          <button className="buttonPrimary" type="button" disabled={loading || !prospect.trim() || !sourceCompany.trim()} onClick={runFullPipeline}>
+            {loading ? "Council running..." : "Run full pipeline"}
           </button>
-
-          <button
-            className="buttonTertiary"
-            type="button"
-            onClick={() => {
-              setSkill(DEFAULT_SKILL);
-              setPrompt(DEFAULT_PROMPT);
-              setProspect("Zepto");
-              setSourceCompany("Razorpay");
-            }}
-          >
-            Reset defaults
+          <button className="buttonTertiary" type="button" onClick={() => {
+            if (defaults) setPrompts({
+              manager_plan: { ...defaults.manager_plan },
+              seller_research: { ...defaults.seller_research },
+              prospect_research: { ...defaults.prospect_research },
+              manager_review: { ...defaults.manager_review },
+              generate_microsite: { ...defaults.generate_microsite },
+            });
+          }}>
+            Reset all prompts
           </button>
         </div>
       </section>
@@ -264,77 +276,118 @@ export default function SandboxPage() {
           <div className="sandboxSpinner" />
           <div>
             <p className="kicker">Council executing</p>
-            <h2 className="sectionTitle">
-              5 agents running: plan, research seller, research prospect, review, generate. This takes 30-90 seconds.
-            </h2>
-            <p className="sectionText">
-              The Manager plans, two Researchers run in parallel, the Manager reviews, then the Generator builds HTML from grounded research.
-            </p>
+            <h2 className="sectionTitle">5 agents running with your custom prompts. 30-90 seconds.</h2>
           </div>
         </section>
       ) : null}
+
+      <section className="stageList">
+        {STAGES.map((stage) => {
+          const isExpanded = expandedStage === stage.key;
+          const result = stageResults[stage.key];
+          const isRunning = runningStage === stage.key;
+
+          return (
+            <article className={`panel stagePanel ${isExpanded ? "stageExpanded" : ""}`} key={stage.key}>
+              <button className="stageHeader" type="button" onClick={() => setExpandedStage(isExpanded ? null : stage.key)}>
+                <div className="stageHeaderLeft">
+                  <strong>{stage.label}</strong>
+                  <span className="stepAgentBadge">{stage.agent}</span>
+                  {result ? (
+                    <span className={`statusChip ${result.status === "completed" ? "statusReady" : "statusError"}`}>
+                      {result.status} &middot; {result.duration_ms.toFixed(0)}ms
+                      {result.cost_usd ? ` · $${result.cost_usd.toFixed(4)}` : ""}
+                    </span>
+                  ) : null}
+                </div>
+                <span className="stageChevron">{isExpanded ? "−" : "+"}</span>
+              </button>
+
+              {isExpanded ? (
+                <div className="stageBody">
+                  <div className="stagePromptGrid">
+                    <div className="fieldStack">
+                      <div className="fieldTop">
+                        <strong>System prompt</strong>
+                        <span className="fieldHint">Agent identity and instructions</span>
+                      </div>
+                      <textarea
+                        className="sandboxTextarea stageTextarea"
+                        value={prompts[stage.key].system}
+                        onChange={(e) => updatePrompt(stage.key, "system", e.target.value)}
+                      />
+                    </div>
+                    <div className="fieldStack">
+                      <div className="fieldTop">
+                        <strong>User prompt</strong>
+                        <span className="fieldHint">{"{{prospect}}, {{source_company}}, {{generation_plan}}, etc."}</span>
+                      </div>
+                      <textarea
+                        className="sandboxTextarea stageTextarea"
+                        value={prompts[stage.key].user}
+                        onChange={(e) => updatePrompt(stage.key, "user", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="actionRow">
+                    <button
+                      className="buttonSecondary"
+                      type="button"
+                      disabled={isRunning || loading}
+                      onClick={() => runSingleStage(stage.key)}
+                    >
+                      {isRunning ? "Running..." : `Test ${stage.label}`}
+                    </button>
+                    <button className="buttonTertiary" type="button" onClick={() => resetStage(stage.key)}>
+                      Reset to default
+                    </button>
+                  </div>
+
+                  {result ? (
+                    <div className="stageResult">
+                      <div className="stepMetrics">
+                        {result.model_name ? <span>Model: {result.model_name}</span> : null}
+                        {result.input_tokens ? <span>In: {result.input_tokens}</span> : null}
+                        {result.output_tokens ? <span>Out: {result.output_tokens}</span> : null}
+                        {result.cost_usd ? <span>Cost: ${result.cost_usd.toFixed(4)}</span> : null}
+                      </div>
+                      <pre className="stepMeta">{result.output}</pre>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </section>
 
       {run && !loading ? (
         <section className="sandboxPreview">
           <div className="previewHeader">
             <div>
               <p className="kicker">{run.source_company} x {run.prospect} &middot; {run.status}</p>
-              <h2 className="sectionTitle">Council run complete</h2>
+              <h2 className="sectionTitle">Council run &middot; {(run.total_duration_ms / 1000).toFixed(1)}s &middot; ${run.total_cost_usd.toFixed(4)}</h2>
             </div>
             <div className="navCluster">
+              {run.final_html ? <button className={`navLink ${viewMode === "preview" ? "active" : ""}`} type="button" onClick={() => setViewMode("preview")}>Preview</button> : null}
+              <button className={`navLink ${viewMode === "research" ? "active" : ""}`} type="button" onClick={() => setViewMode("research")}>Research</button>
+              <button className={`navLink ${viewMode === "trace" ? "active" : ""}`} type="button" onClick={() => setViewMode("trace")}>Trace</button>
+              {run.final_html ? <button className={`navLink ${viewMode === "source" ? "active" : ""}`} type="button" onClick={() => setViewMode("source")}>Source</button> : null}
               {run.final_html ? (
-                <button className={`navLink ${viewMode === "preview" ? "active" : ""}`} type="button" onClick={() => setViewMode("preview")}>
-                  Preview
-                </button>
-              ) : null}
-              <button className={`navLink ${viewMode === "research" ? "active" : ""}`} type="button" onClick={() => setViewMode("research")}>
-                Research
-              </button>
-              <button className={`navLink ${viewMode === "trace" ? "active" : ""}`} type="button" onClick={() => setViewMode("trace")}>
-                Trace
-              </button>
-              {run.final_html ? (
-                <button className={`navLink ${viewMode === "source" ? "active" : ""}`} type="button" onClick={() => setViewMode("source")}>
-                  Source
-                </button>
-              ) : null}
-              {run.final_html ? (
-                <button
-                  className="buttonTertiary"
-                  type="button"
-                  onClick={() => {
-                    const blob = new Blob([run.final_html], { type: "text/html" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `${sourceCompany.toLowerCase()}-x-${prospect.toLowerCase()}.html`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                >
+                <button className="buttonTertiary" type="button" onClick={() => {
+                  const blob = new Blob([run.final_html], { type: "text/html" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${sourceCompany.toLowerCase()}-x-${prospect.toLowerCase()}.html`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}>
                   Download
                 </button>
               ) : null}
             </div>
-          </div>
-
-          <div className="metricGrid metricGridFour compactMetrics">
-            <article className="metricCard">
-              <span>Total duration</span>
-              <strong>{(run.total_duration_ms / 1000).toFixed(1)}s</strong>
-            </article>
-            <article className="metricCard">
-              <span>Total cost</span>
-              <strong>${run.total_cost_usd.toFixed(4)}</strong>
-            </article>
-            <article className="metricCard">
-              <span>Steps</span>
-              <strong>{run.steps.length} agents</strong>
-            </article>
-            <article className="metricCard">
-              <span>Status</span>
-              <strong>{run.status}</strong>
-            </article>
           </div>
 
           {viewMode === "preview" && run.final_html ? (
@@ -344,58 +397,23 @@ export default function SandboxPage() {
                 <div className="frameAddress">{sourceCompany.toLowerCase()}-x-{prospect.toLowerCase()}.html</div>
                 <div className="frameRoute">{run.status}</div>
               </div>
-              <iframe
-                ref={iframeRef}
-                className="sandboxIframe"
-                srcDoc={run.final_html}
-                sandbox="allow-scripts allow-same-origin"
-                title="Generated microsite preview"
-              />
+              <iframe ref={iframeRef} className="sandboxIframe" srcDoc={run.final_html} sandbox="allow-scripts allow-same-origin" title="Preview" />
             </div>
           ) : null}
 
           {viewMode === "research" ? (
             <div className="sandboxResearchGrid">
               <article className="panel detailPanel">
-                <div className="panelHeader compactHeader">
-                  <div>
-                    <p className="kicker">Seller research</p>
-                    <h2 className="sectionTitle">{run.source_company}</h2>
-                  </div>
-                </div>
-                <div className="sandboxResearchContent">
-                  {run.seller_research.split("\n").map((line, i) => (
-                    <p key={i}>{line || "\u00A0"}</p>
-                  ))}
-                </div>
+                <p className="kicker">Seller research</p>
+                <div className="sandboxResearchContent">{run.seller_research.split("\n").map((l, i) => <p key={i}>{l || "\u00A0"}</p>)}</div>
               </article>
-
               <article className="panel detailPanel">
-                <div className="panelHeader compactHeader">
-                  <div>
-                    <p className="kicker">Prospect research</p>
-                    <h2 className="sectionTitle">{run.prospect}</h2>
-                  </div>
-                </div>
-                <div className="sandboxResearchContent">
-                  {run.prospect_research.split("\n").map((line, i) => (
-                    <p key={i}>{line || "\u00A0"}</p>
-                  ))}
-                </div>
+                <p className="kicker">Prospect research</p>
+                <div className="sandboxResearchContent">{run.prospect_research.split("\n").map((l, i) => <p key={i}>{l || "\u00A0"}</p>)}</div>
               </article>
-
               <article className="panel detailPanel" style={{ gridColumn: "1 / -1" }}>
-                <div className="panelHeader compactHeader">
-                  <div>
-                    <p className="kicker">Manager review</p>
-                    <h2 className="sectionTitle">Quality assessment</h2>
-                  </div>
-                </div>
-                <div className="sandboxResearchContent">
-                  {run.review_notes.split("\n").map((line, i) => (
-                    <p key={i}>{line || "\u00A0"}</p>
-                  ))}
-                </div>
+                <p className="kicker">Manager review</p>
+                <div className="sandboxResearchContent">{run.review_notes.split("\n").map((l, i) => <p key={i}>{l || "\u00A0"}</p>)}</div>
               </article>
             </div>
           ) : null}
@@ -403,12 +421,12 @@ export default function SandboxPage() {
           {viewMode === "trace" ? (
             <div className="sandboxTrace">
               <div className="stepList">
-                {run.steps.map((step, index) => (
-                  <article className="stepItem" key={`${step.step_name}-${index}`}>
+                {run.steps.map((step, i) => (
+                  <article className="stepItem" key={`${step.step_name}-${i}`}>
                     <div className="stepHead">
                       <div>
-                        <strong>{STEP_LABELS[step.step_name] ?? step.step_name}</strong>
-                        <span className="stepAgentBadge">{AGENT_LABELS[step.agent_role] ?? step.agent_role}</span>
+                        <strong>{step.step_name}</strong>
+                        <span className="stepAgentBadge">{step.agent_role}</span>
                       </div>
                       <span>{step.duration_ms.toFixed(0)} ms</span>
                     </div>
@@ -419,9 +437,6 @@ export default function SandboxPage() {
                       {step.cost_usd ? <span>Cost: ${step.cost_usd.toFixed(4)}</span> : null}
                       <span>Status: {step.status}</span>
                     </div>
-                    {Object.keys(step.metadata).length > 0 ? (
-                      <pre className="stepMeta">{JSON.stringify(step.metadata, null, 2)}</pre>
-                    ) : null}
                   </article>
                 ))}
               </div>
@@ -433,12 +448,6 @@ export default function SandboxPage() {
               <pre className="sandboxCode">{run.final_html || "No HTML output."}</pre>
             </div>
           ) : null}
-        </section>
-      ) : null}
-
-      {!run && !loading ? (
-        <section className="emptyPanel">
-          <p>Configure the seller, prospect, skill, and prompt. Then run the full council pipeline.</p>
         </section>
       ) : null}
     </main>

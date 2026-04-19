@@ -3,8 +3,8 @@
 Architecture:
     Manager (planner) -> Seller Researcher + Prospect Researcher -> Manager (reviewer) -> Microsite Generator
 
-Each agent writes structured output to LangGraph state and produces
-observability metadata (duration, tokens, cost) per step.
+Each agent reads its system+user prompt from state, so prompts are fully
+editable from the sandbox UI. Every step produces observability metadata.
 """
 
 from __future__ import annotations
@@ -69,7 +69,6 @@ def stringify_content(content: Any) -> str:
 
 
 def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    """Rough cost estimate in USD. Good enough for observability."""
     rates: dict[str, tuple[float, float]] = {
         "gpt-4.1-mini": (0.0004, 0.0016),
         "gpt-4.1": (0.002, 0.008),
@@ -80,8 +79,127 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     return round((input_tokens / 1000) * input_rate + (output_tokens / 1000) * output_rate, 6)
 
 
+def _invoke_llm(system: str, user: str, temperature: float = 0.5) -> tuple[str, str, dict[str, int | None], float, float]:
+    """Shared LLM call. Returns (output, model, usage, duration_ms, cost)."""
+    llm = get_llm(temperature=temperature)
+    start = time.perf_counter()
+    result = llm.invoke([{"role": "system", "content": system}, {"role": "user", "content": user}])
+    duration_ms = round((time.perf_counter() - start) * 1000, 2)
+    usage = normalize_usage(result)
+    model = getattr(result, "response_metadata", {}).get("model_name", get_model_name())
+    cost = estimate_cost(model, usage.get("input_tokens") or 0, usage.get("output_tokens") or 0)
+    return stringify_content(result.content), model, usage, duration_ms, cost
+
+
 # ---------------------------------------------------------------------------
-# Step result model
+# Default prompts per stage
+# ---------------------------------------------------------------------------
+
+DEFAULT_PROMPTS: dict[str, dict[str, str]] = {
+    "manager_plan": {
+        "system": (
+            "You are the Manager agent in a council of AI agents building a sales microsite. "
+            "Your job is to create a research plan. You will delegate to two specialist agents:\n"
+            "1. Seller Researcher - will research the source/seller company\n"
+            "2. Prospect Researcher - will research the target/prospect company\n\n"
+            "Output a concise plan that tells each researcher what to focus on. "
+            "Include what the final microsite should emphasize based on the pairing.\n"
+            "Be specific about what data points each researcher should find."
+        ),
+        "user": (
+            "Source company (seller): {{source_company}}\n"
+            "Prospect company (target): {{prospect}}\n\n"
+            "Create a research plan for this microsite. What should each researcher find? "
+            "What angle should the microsite take?"
+        ),
+    },
+    "seller_research": {
+        "system": (
+            "You are the Seller Research Agent. Your job is to research the SOURCE company that is selling/pitching. "
+            "Find and organize:\n"
+            "1. Core products and solutions\n"
+            "2. Key case studies or success stories\n"
+            "3. Brand positioning and differentiators\n"
+            "4. Relevant metrics, scale, and credibility signals\n"
+            "5. Integration capabilities or technical strengths\n\n"
+            "Be factual. Use only publicly available information. Do not invent case studies or stats. "
+            "If you don't know something, say so. Structure your output clearly with headers."
+        ),
+        "user": (
+            "Research this company as the SELLER in a B2B pitch:\n"
+            "Company: {{source_company}}\n\n"
+            "Manager's plan:\n{{generation_plan}}\n\n"
+            "Provide structured research output."
+        ),
+    },
+    "prospect_research": {
+        "system": (
+            "You are the Prospect Research Agent. Your job is to research the TARGET company being pitched to. "
+            "Find and organize:\n"
+            "1. Core business model and operations\n"
+            "2. Key pain points relevant to the seller's offering\n"
+            "3. Decision-maker personas (CTO, VP Eng, Head of Payments, etc.)\n"
+            "4. Recent news, funding, or growth signals\n"
+            "5. Technology stack or infrastructure hints\n"
+            "6. Competitive pressures they face\n\n"
+            "Be factual. Use only publicly available information. Do not invent quotes or internal details. "
+            "Structure your output clearly with headers."
+        ),
+        "user": (
+            "Research this company as the PROSPECT being pitched to:\n"
+            "Company: {{prospect}}\n"
+            "Being pitched by: {{source_company}}\n\n"
+            "Manager's plan:\n{{generation_plan}}\n\n"
+            "Provide structured research output focused on pain points relevant to what the seller offers."
+        ),
+    },
+    "manager_review": {
+        "system": (
+            "You are the Manager agent reviewing research from your specialist agents. "
+            "Evaluate the quality and completeness of both research outputs. "
+            "Decide whether the research is sufficient to generate a compelling microsite.\n\n"
+            "Output:\n"
+            "1. Brief quality assessment of seller research\n"
+            "2. Brief quality assessment of prospect research\n"
+            "3. Key insights to emphasize in the microsite\n"
+            "4. Any gaps or concerns\n"
+            "5. Final verdict: APPROVED or NEEDS_MORE_RESEARCH\n\n"
+            "Be concise. End with exactly one line: VERDICT: APPROVED or VERDICT: NEEDS_MORE_RESEARCH"
+        ),
+        "user": (
+            "Source company: {{source_company}}\n"
+            "Prospect: {{prospect}}\n\n"
+            "Original plan:\n{{generation_plan}}\n\n"
+            "Seller research:\n{{seller_research}}\n\n"
+            "Prospect research:\n{{prospect_research}}\n\n"
+            "Review the research and decide if we can proceed to microsite generation."
+        ),
+    },
+    "generate_microsite": {
+        "system": (
+            "You are a world-class frontend designer and developer. "
+            "You create distinctive, production-grade HTML microsites with exceptional attention to aesthetic details. "
+            "Return ONLY a single, complete, self-contained HTML document. No markdown fences, no explanation. "
+            "The HTML must be a complete standalone page with inline CSS, responsive design, and Google Fonts. "
+            "Use distinctive typography (never Inter, Roboto, Arial). Have a cohesive color palette. "
+            "Include CSS animations for page load. Feel like a real designer made it."
+        ),
+        "user": (
+            "Create a sales microsite for: {{source_company}} selling to {{company_name}}.\n\n"
+            "Include a hero section, 3-4 value propositions, stats, a CTA section, and a footer.\n"
+            "Make it feel premium and modern.\n\n"
+            "--- SELLER RESEARCH ---\n{{seller_research}}\n\n"
+            "--- PROSPECT RESEARCH ---\n{{prospect_research}}\n\n"
+            "--- MANAGER REVIEW NOTES ---\n{{review_notes}}\n\n"
+            "Use the research above to make the microsite specific and grounded. "
+            "Do NOT invent facts not in the research. Return ONLY the raw HTML."
+        ),
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Models
 # ---------------------------------------------------------------------------
 
 class AgentStepResult(BaseModel):
@@ -116,6 +234,20 @@ class CouncilRunResult(BaseModel):
     final_html: str
 
 
+class StagePrompts(BaseModel):
+    """Per-stage prompt overrides. If empty, defaults are used."""
+    manager_plan_system: str = ""
+    manager_plan_user: str = ""
+    seller_research_system: str = ""
+    seller_research_user: str = ""
+    prospect_research_system: str = ""
+    prospect_research_user: str = ""
+    manager_review_system: str = ""
+    manager_review_user: str = ""
+    generator_system: str = ""
+    generator_user: str = ""
+
+
 # ---------------------------------------------------------------------------
 # LangGraph state
 # ---------------------------------------------------------------------------
@@ -124,21 +256,16 @@ class CouncilState(TypedDict, total=False):
     run_id: str
     prospect: str
     source_company: str
-    skill_prompt: str
-    user_prompt_template: str
 
-    # Manager planner output
+    # Per-stage prompt overrides
+    prompts: dict[str, dict[str, str]]
+
+    # Stage outputs
     generation_plan: str
-
-    # Research outputs
     seller_research: str
     prospect_research: str
-
-    # Manager reviewer output
     review_notes: str
     approved: bool
-
-    # Generator output
     final_html: str
 
     # Observability
@@ -146,278 +273,107 @@ class CouncilState(TypedDict, total=False):
     error: str
 
 
+def _get_prompt(state: CouncilState, stage: str, key: str) -> str:
+    """Get prompt for a stage, falling back to defaults."""
+    custom = (state.get("prompts") or {}).get(stage, {}).get(key, "")
+    if custom.strip():
+        return custom
+    return DEFAULT_PROMPTS.get(stage, {}).get(key, "")
+
+
+def _render(template: str, state: CouncilState) -> str:
+    """Replace placeholders in a prompt template."""
+    return (
+        template
+        .replace("{{prospect}}", state.get("prospect", ""))
+        .replace("{{company_name}}", state.get("prospect", ""))
+        .replace("{{source_company}}", state.get("source_company", ""))
+        .replace("{{generation_plan}}", state.get("generation_plan", "No plan provided."))
+        .replace("{{seller_research}}", state.get("seller_research", "No seller research available."))
+        .replace("{{prospect_research}}", state.get("prospect_research", "No prospect research available."))
+        .replace("{{review_notes}}", state.get("review_notes", "No review notes."))
+    )
+
+
 # ---------------------------------------------------------------------------
 # Agent nodes
 # ---------------------------------------------------------------------------
 
-def manager_plan_node(state: CouncilState) -> CouncilState:
-    """Manager plans which research is needed and what the microsite should cover."""
+def _run_agent_node(
+    state: CouncilState,
+    stage: str,
+    agent_role: str,
+    temperature: float = 0.5,
+    output_key: str | None = None,
+) -> CouncilState:
+    """Generic agent node runner."""
     started_at = utc_now_iso()
     start_perf = time.perf_counter()
 
-    system = (
-        "You are the Manager agent in a council of AI agents building a sales microsite. "
-        "Your job is to create a research plan. You will delegate to two specialist agents:\n"
-        "1. Seller Researcher - will research the source/seller company\n"
-        "2. Prospect Researcher - will research the target/prospect company\n\n"
-        "Output a concise plan that tells each researcher what to focus on. "
-        "Include what the final microsite should emphasize based on the pairing.\n"
-        "Be specific about what data points each researcher should find."
-    )
-    user = (
-        f"Source company (seller): {state['source_company']}\n"
-        f"Prospect company (target): {state['prospect']}\n\n"
-        "Create a research plan for this microsite. What should each researcher find? "
-        "What angle should the microsite take?"
-    )
+    system = _render(_get_prompt(state, stage, "system"), state)
+    user = _render(_get_prompt(state, stage, "user"), state)
 
     try:
-        llm = get_llm(temperature=0.5)
-        result = llm.invoke([
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ])
-        usage = normalize_usage(result)
-        model = getattr(result, "response_metadata", {}).get("model_name", get_model_name())
-        output = stringify_content(result.content)
-        duration_ms = round((time.perf_counter() - start_perf) * 1000, 2)
-        cost = estimate_cost(model, usage.get("input_tokens") or 0, usage.get("output_tokens") or 0)
+        output, model, usage, duration_ms, cost = _invoke_llm(system, user, temperature)
 
         step = AgentStepResult(
-            step_name="manager_plan",
-            agent_role="manager",
-            status="completed",
-            started_at=started_at,
-            duration_ms=duration_ms,
-            output=output,
-            model_name=model,
-            input_tokens=usage.get("input_tokens"),
-            output_tokens=usage.get("output_tokens"),
-            total_tokens=usage.get("total_tokens"),
+            step_name=stage, agent_role=agent_role, status="completed",
+            started_at=started_at, duration_ms=duration_ms, output=output[:500],
+            model_name=model, input_tokens=usage.get("input_tokens"),
+            output_tokens=usage.get("output_tokens"), total_tokens=usage.get("total_tokens"),
             cost_usd=cost,
-            metadata={"source_company": state["source_company"], "prospect": state["prospect"]},
+            metadata={
+                "system_prompt_len": len(system),
+                "user_prompt_len": len(user),
+                "output_chars": len(output),
+            },
         )
-        return {
-            "generation_plan": output,
-            "steps": [*state.get("steps", []), step.model_dump()],
-        }
+        updates: dict[str, Any] = {"steps": [*state.get("steps", []), step.model_dump()]}
+        if output_key:
+            updates[output_key] = output
+        return updates
     except Exception as exc:
-        logger.exception("Manager planning failed")
+        logger.exception("%s failed", stage)
         step = AgentStepResult(
-            step_name="manager_plan", agent_role="manager", status="failed",
+            step_name=stage, agent_role=agent_role, status="failed",
             started_at=started_at, duration_ms=round((time.perf_counter() - start_perf) * 1000, 2),
             output="", metadata={"error": str(exc)},
         )
-        return {"error": str(exc), "generation_plan": "", "steps": [*state.get("steps", []), step.model_dump()]}
+        updates = {"steps": [*state.get("steps", []), step.model_dump()]}
+        if output_key:
+            updates[output_key] = ""
+        updates["error"] = str(exc)
+        return updates
+
+
+def manager_plan_node(state: CouncilState) -> CouncilState:
+    return _run_agent_node(state, "manager_plan", "manager", temperature=0.5, output_key="generation_plan")
 
 
 def seller_research_node(state: CouncilState) -> CouncilState:
-    """Researches the source/seller company: solutions, case studies, brand positioning."""
-    started_at = utc_now_iso()
-    start_perf = time.perf_counter()
-
-    system = (
-        "You are the Seller Research Agent. Your job is to research the SOURCE company that is selling/pitching. "
-        "Find and organize:\n"
-        "1. Core products and solutions\n"
-        "2. Key case studies or success stories\n"
-        "3. Brand positioning and differentiators\n"
-        "4. Relevant metrics, scale, and credibility signals\n"
-        "5. Integration capabilities or technical strengths\n\n"
-        "Be factual. Use only publicly available information. Do not invent case studies or stats. "
-        "If you don't know something, say so. Structure your output clearly with headers."
-    )
-    user = (
-        f"Research this company as the SELLER in a B2B pitch:\n"
-        f"Company: {state['source_company']}\n\n"
-        f"Manager's plan:\n{state.get('generation_plan', 'No plan provided.')}\n\n"
-        "Provide structured research output."
-    )
-
-    try:
-        llm = get_llm(temperature=0.3)
-        result = llm.invoke([
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ])
-        usage = normalize_usage(result)
-        model = getattr(result, "response_metadata", {}).get("model_name", get_model_name())
-        output = stringify_content(result.content)
-        duration_ms = round((time.perf_counter() - start_perf) * 1000, 2)
-        cost = estimate_cost(model, usage.get("input_tokens") or 0, usage.get("output_tokens") or 0)
-
-        step = AgentStepResult(
-            step_name="seller_research", agent_role="seller_researcher", status="completed",
-            started_at=started_at, duration_ms=duration_ms, output=output[:500],
-            model_name=model, input_tokens=usage.get("input_tokens"),
-            output_tokens=usage.get("output_tokens"), total_tokens=usage.get("total_tokens"),
-            cost_usd=cost, metadata={"company": state["source_company"], "output_chars": len(output)},
-        )
-        return {"seller_research": output, "steps": [*state.get("steps", []), step.model_dump()]}
-    except Exception as exc:
-        logger.exception("Seller research failed for %s", state["source_company"])
-        step = AgentStepResult(
-            step_name="seller_research", agent_role="seller_researcher", status="failed",
-            started_at=started_at, duration_ms=round((time.perf_counter() - start_perf) * 1000, 2),
-            output="", metadata={"error": str(exc)},
-        )
-        return {"seller_research": "", "steps": [*state.get("steps", []), step.model_dump()]}
+    return _run_agent_node(state, "seller_research", "seller_researcher", temperature=0.3, output_key="seller_research")
 
 
 def prospect_research_node(state: CouncilState) -> CouncilState:
-    """Researches the prospect/target company: pain points, personas, market context."""
-    started_at = utc_now_iso()
-    start_perf = time.perf_counter()
-
-    system = (
-        "You are the Prospect Research Agent. Your job is to research the TARGET company being pitched to. "
-        "Find and organize:\n"
-        "1. Core business model and operations\n"
-        "2. Key pain points relevant to the seller's offering\n"
-        "3. Decision-maker personas (CTO, VP Eng, Head of Payments, etc.)\n"
-        "4. Recent news, funding, or growth signals\n"
-        "5. Technology stack or infrastructure hints\n"
-        "6. Competitive pressures they face\n\n"
-        "Be factual. Use only publicly available information. Do not invent quotes or internal details. "
-        "Structure your output clearly with headers."
-    )
-    user = (
-        f"Research this company as the PROSPECT being pitched to:\n"
-        f"Company: {state['prospect']}\n"
-        f"Being pitched by: {state['source_company']}\n\n"
-        f"Manager's plan:\n{state.get('generation_plan', 'No plan provided.')}\n\n"
-        "Provide structured research output focused on pain points relevant to what the seller offers."
-    )
-
-    try:
-        llm = get_llm(temperature=0.3)
-        result = llm.invoke([
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ])
-        usage = normalize_usage(result)
-        model = getattr(result, "response_metadata", {}).get("model_name", get_model_name())
-        output = stringify_content(result.content)
-        duration_ms = round((time.perf_counter() - start_perf) * 1000, 2)
-        cost = estimate_cost(model, usage.get("input_tokens") or 0, usage.get("output_tokens") or 0)
-
-        step = AgentStepResult(
-            step_name="prospect_research", agent_role="prospect_researcher", status="completed",
-            started_at=started_at, duration_ms=duration_ms, output=output[:500],
-            model_name=model, input_tokens=usage.get("input_tokens"),
-            output_tokens=usage.get("output_tokens"), total_tokens=usage.get("total_tokens"),
-            cost_usd=cost, metadata={"company": state["prospect"], "output_chars": len(output)},
-        )
-        return {"prospect_research": output, "steps": [*state.get("steps", []), step.model_dump()]}
-    except Exception as exc:
-        logger.exception("Prospect research failed for %s", state["prospect"])
-        step = AgentStepResult(
-            step_name="prospect_research", agent_role="prospect_researcher", status="failed",
-            started_at=started_at, duration_ms=round((time.perf_counter() - start_perf) * 1000, 2),
-            output="", metadata={"error": str(exc)},
-        )
-        return {"prospect_research": "", "steps": [*state.get("steps", []), step.model_dump()]}
+    return _run_agent_node(state, "prospect_research", "prospect_researcher", temperature=0.3, output_key="prospect_research")
 
 
 def manager_review_node(state: CouncilState) -> CouncilState:
-    """Manager reviews research quality and decides whether to proceed to generation."""
-    started_at = utc_now_iso()
-    start_perf = time.perf_counter()
-
-    system = (
-        "You are the Manager agent reviewing research from your specialist agents. "
-        "Evaluate the quality and completeness of both research outputs. "
-        "Decide whether the research is sufficient to generate a compelling microsite.\n\n"
-        "Output:\n"
-        "1. Brief quality assessment of seller research\n"
-        "2. Brief quality assessment of prospect research\n"
-        "3. Key insights to emphasize in the microsite\n"
-        "4. Any gaps or concerns\n"
-        "5. Final verdict: APPROVED or NEEDS_MORE_RESEARCH\n\n"
-        "Be concise. End with exactly one line: VERDICT: APPROVED or VERDICT: NEEDS_MORE_RESEARCH"
-    )
-    user = (
-        f"Source company: {state['source_company']}\n"
-        f"Prospect: {state['prospect']}\n\n"
-        f"Original plan:\n{state.get('generation_plan', 'N/A')}\n\n"
-        f"Seller research:\n{state.get('seller_research', 'No research available.')}\n\n"
-        f"Prospect research:\n{state.get('prospect_research', 'No research available.')}\n\n"
-        "Review the research and decide if we can proceed to microsite generation."
-    )
-
-    try:
-        llm = get_llm(temperature=0.3)
-        result = llm.invoke([
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ])
-        usage = normalize_usage(result)
-        model = getattr(result, "response_metadata", {}).get("model_name", get_model_name())
-        output = stringify_content(result.content)
-        duration_ms = round((time.perf_counter() - start_perf) * 1000, 2)
-        cost = estimate_cost(model, usage.get("input_tokens") or 0, usage.get("output_tokens") or 0)
-        approved = "VERDICT: APPROVED" in output.upper()
-
-        step = AgentStepResult(
-            step_name="manager_review", agent_role="manager", status="completed",
-            started_at=started_at, duration_ms=duration_ms, output=output[:500],
-            model_name=model, input_tokens=usage.get("input_tokens"),
-            output_tokens=usage.get("output_tokens"), total_tokens=usage.get("total_tokens"),
-            cost_usd=cost, metadata={"approved": approved},
-        )
-        return {
-            "review_notes": output,
-            "approved": approved,
-            "steps": [*state.get("steps", []), step.model_dump()],
-        }
-    except Exception as exc:
-        logger.exception("Manager review failed")
-        step = AgentStepResult(
-            step_name="manager_review", agent_role="manager", status="failed",
-            started_at=started_at, duration_ms=round((time.perf_counter() - start_perf) * 1000, 2),
-            output="", metadata={"error": str(exc)},
-        )
-        return {
-            "review_notes": "",
-            "approved": True,
-            "steps": [*state.get("steps", []), step.model_dump()],
-        }
+    result = _run_agent_node(state, "manager_review", "manager", temperature=0.3, output_key="review_notes")
+    review_text = result.get("review_notes", "")
+    result["approved"] = "VERDICT: APPROVED" in review_text.upper() if review_text else True
+    return result
 
 
 def generate_microsite_node(state: CouncilState) -> CouncilState:
-    """Generates the final HTML microsite using research + skill instructions."""
     started_at = utc_now_iso()
     start_perf = time.perf_counter()
 
-    skill = state.get("skill_prompt", "")
-    template = state.get("user_prompt_template", "")
-
-    user_prompt = template.replace("{{company_name}}", state["prospect"])
-    user_prompt = user_prompt.replace("{{source_company}}", state["source_company"])
-
-    user_prompt += (
-        "\n\n--- SELLER RESEARCH (from Seller Research Agent) ---\n"
-        f"{state.get('seller_research', 'No seller research available.')}\n\n"
-        "--- PROSPECT RESEARCH (from Prospect Research Agent) ---\n"
-        f"{state.get('prospect_research', 'No prospect research available.')}\n\n"
-        "--- MANAGER REVIEW NOTES ---\n"
-        f"{state.get('review_notes', 'No review notes.')}\n\n"
-        "Use the research above to make the microsite specific, credible, and grounded in real facts. "
-        "Do NOT invent facts that aren't in the research. "
-        "Return ONLY the raw HTML. No markdown fences, no explanation."
-    )
+    system = _render(_get_prompt(state, "generate_microsite", "system"), state)
+    user = _render(_get_prompt(state, "generate_microsite", "user"), state)
 
     try:
-        llm = get_llm(temperature=0.9)
-        result = llm.invoke([
-            {"role": "system", "content": skill},
-            {"role": "user", "content": user_prompt},
-        ])
-        usage = normalize_usage(result)
-        model = getattr(result, "response_metadata", {}).get("model_name", get_model_name())
-        html = stringify_content(result.content)
-        duration_ms = round((time.perf_counter() - start_perf) * 1000, 2)
-        cost = estimate_cost(model, usage.get("input_tokens") or 0, usage.get("output_tokens") or 0)
+        html, model, usage, duration_ms, cost = _invoke_llm(system, user, temperature=0.9)
 
         if "```html" in html:
             html = html.replace("```html\n", "").replace("```\n", "").replace("```", "")
@@ -425,7 +381,7 @@ def generate_microsite_node(state: CouncilState) -> CouncilState:
 
         step = AgentStepResult(
             step_name="generate_microsite", agent_role="generator", status="completed",
-            started_at=started_at, duration_ms=duration_ms, output=f"HTML generated: {len(html)} chars",
+            started_at=started_at, duration_ms=duration_ms, output=f"HTML: {len(html)} chars",
             model_name=model, input_tokens=usage.get("input_tokens"),
             output_tokens=usage.get("output_tokens"), total_tokens=usage.get("total_tokens"),
             cost_usd=cost, metadata={"html_chars": len(html)},
@@ -442,11 +398,10 @@ def generate_microsite_node(state: CouncilState) -> CouncilState:
 
 
 # ---------------------------------------------------------------------------
-# Graph assembly
+# Graph
 # ---------------------------------------------------------------------------
 
 def should_generate(state: CouncilState) -> str:
-    """Router: proceed to generation if approved, otherwise end."""
     if state.get("approved", True):
         return "generate_microsite"
     return END
@@ -454,14 +409,12 @@ def should_generate(state: CouncilState) -> str:
 
 def build_council_graph() -> Any:
     graph = StateGraph(CouncilState)
-
     graph.add_node("manager_plan", manager_plan_node)
     graph.add_node("seller_research", seller_research_node)
     graph.add_node("prospect_research", prospect_research_node)
     graph.add_node("manager_review", manager_review_node)
     graph.add_node("generate_microsite", generate_microsite_node)
 
-    # Flow: plan -> parallel research -> review -> conditional generate
     graph.add_edge(START, "manager_plan")
     graph.add_edge("manager_plan", "seller_research")
     graph.add_edge("manager_plan", "prospect_research")
@@ -469,45 +422,107 @@ def build_council_graph() -> Any:
     graph.add_edge("prospect_research", "manager_review")
     graph.add_conditional_edges("manager_review", should_generate, {"generate_microsite": "generate_microsite", END: END})
     graph.add_edge("generate_microsite", END)
-
     return graph.compile()
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Single-stage runner (for sandbox testing)
+# ---------------------------------------------------------------------------
+
+def run_single_stage(
+    stage: str,
+    prospect: str,
+    source_company: str,
+    prompts: dict[str, dict[str, str]],
+    context: dict[str, str] | None = None,
+) -> AgentStepResult:
+    """Run a single council stage with custom prompts. Context provides outputs from previous stages."""
+    state: CouncilState = {
+        "run_id": uuid4().hex,
+        "prospect": prospect,
+        "source_company": source_company,
+        "prompts": prompts,
+        "steps": [],
+        "generation_plan": (context or {}).get("generation_plan", ""),
+        "seller_research": (context or {}).get("seller_research", ""),
+        "prospect_research": (context or {}).get("prospect_research", ""),
+        "review_notes": (context or {}).get("review_notes", ""),
+    }
+
+    node_map = {
+        "manager_plan": manager_plan_node,
+        "seller_research": seller_research_node,
+        "prospect_research": prospect_research_node,
+        "manager_review": manager_review_node,
+        "generate_microsite": generate_microsite_node,
+    }
+
+    node_fn = node_map.get(stage)
+    if not node_fn:
+        raise ValueError(f"Unknown stage: {stage}")
+
+    result_state = node_fn(state)
+    steps = result_state.get("steps", [])
+    if steps:
+        return AgentStepResult.model_validate(steps[-1])
+    raise RuntimeError(f"Stage {stage} produced no step result")
+
+
+# ---------------------------------------------------------------------------
+# Full pipeline
 # ---------------------------------------------------------------------------
 
 def run_council(
     prospect: str,
     source_company: str,
-    skill_prompt: str,
-    user_prompt_template: str,
+    skill_prompt: str = "",
+    user_prompt_template: str = "",
+    stage_prompts: StagePrompts | None = None,
 ) -> CouncilRunResult:
-    """Execute the full council pipeline and return a structured result."""
     run_id = uuid4().hex
     run_started_at = utc_now_iso()
     run_start_perf = time.perf_counter()
+
+    prompts: dict[str, dict[str, str]] = {}
+    if stage_prompts:
+        sp = stage_prompts
+        if sp.manager_plan_system or sp.manager_plan_user:
+            prompts["manager_plan"] = {"system": sp.manager_plan_system, "user": sp.manager_plan_user}
+        if sp.seller_research_system or sp.seller_research_user:
+            prompts["seller_research"] = {"system": sp.seller_research_system, "user": sp.seller_research_user}
+        if sp.prospect_research_system or sp.prospect_research_user:
+            prompts["prospect_research"] = {"system": sp.prospect_research_system, "user": sp.prospect_research_user}
+        if sp.manager_review_system or sp.manager_review_user:
+            prompts["manager_review"] = {"system": sp.manager_review_system, "user": sp.manager_review_user}
+        if sp.generator_system or sp.generator_user:
+            prompts["generate_microsite"] = {"system": sp.generator_system, "user": sp.generator_user}
+
+    # Legacy: if caller only sent skill_prompt + user_prompt_template, use as generator overrides
+    if not prompts.get("generate_microsite"):
+        if skill_prompt.strip() or user_prompt_template.strip():
+            prompts["generate_microsite"] = {
+                "system": skill_prompt,
+                "user": user_prompt_template,
+            }
 
     council = build_council_graph()
     final_state = council.invoke({
         "run_id": run_id,
         "prospect": prospect,
         "source_company": source_company,
-        "skill_prompt": skill_prompt,
-        "user_prompt_template": user_prompt_template,
+        "prompts": prompts,
         "steps": [],
     })
 
     steps = [AgentStepResult.model_validate(s) for s in final_state.get("steps", [])]
     total_cost = sum(s.cost_usd or 0 for s in steps)
     html = final_state.get("final_html", "")
-    status = "completed" if html else "failed"
 
     return CouncilRunResult(
         run_id=run_id,
         prospect=prospect,
         source_company=source_company,
-        status=status,
+        status="completed" if html else "failed",
         started_at=run_started_at,
         completed_at=utc_now_iso(),
         total_duration_ms=round((time.perf_counter() - run_start_perf) * 1000, 2),

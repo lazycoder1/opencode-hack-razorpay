@@ -1569,7 +1569,7 @@ def sandbox_generate_compat(request: SandboxStepRequest) -> SandboxStepResult:
 # Council endpoints
 # ---------------------------------------------------------------------------
 
-from backend.council import CouncilRunResult, run_council  # noqa: E402
+from backend.council import CouncilRunResult, StagePrompts, AgentStepResult as CouncilStepResult, run_council, run_single_stage, DEFAULT_PROMPTS as COUNCIL_DEFAULT_PROMPTS  # noqa: E402
 from backend import db as pgdb  # noqa: E402
 from backend.evals import EVAL_CASES, run_eval_case, run_all_evals, DEFAULT_SKILL as EVAL_DEFAULT_SKILL, DEFAULT_PROMPT as EVAL_DEFAULT_PROMPT  # noqa: E402
 from fastapi.responses import HTMLResponse  # noqa: E402
@@ -1578,8 +1578,18 @@ from fastapi.responses import HTMLResponse  # noqa: E402
 class CouncilRunRequest(BaseModel):
     prospect: str = Field(description="Prospect company name")
     source_company: str = Field(description="Source/seller company name")
-    skill_prompt: str = Field(description="Skill/system prompt for the generator agent")
-    user_prompt_template: str = Field(description="User prompt template with {{company_name}} and {{source_company}}")
+    skill_prompt: str = Field(default="", description="Legacy: generator system prompt")
+    user_prompt_template: str = Field(default="", description="Legacy: generator user prompt template")
+    stage_prompts: StagePrompts | None = None
+
+
+class SingleStageRequest(BaseModel):
+    stage: str = Field(description="One of: manager_plan, seller_research, prospect_research, manager_review, generate_microsite")
+    prospect: str
+    source_company: str
+    system_prompt: str = Field(default="", description="System prompt override for this stage")
+    user_prompt: str = Field(default="", description="User prompt override for this stage")
+    context: dict[str, str] = Field(default_factory=dict, description="Outputs from previous stages")
 
 
 @app.on_event("startup")
@@ -1591,6 +1601,32 @@ def ensure_postgres_schema() -> None:
         logger.exception("Postgres schema bootstrap failed -- DB features will be unavailable")
 
 
+@app.get("/api/council/default-prompts")
+def get_council_default_prompts() -> dict[str, dict[str, str]]:
+    return COUNCIL_DEFAULT_PROMPTS
+
+
+@app.post("/api/council/stage")
+def run_council_stage(request: SingleStageRequest) -> dict[str, Any]:
+    prompts: dict[str, dict[str, str]] = {}
+    if request.system_prompt.strip() or request.user_prompt.strip():
+        prompts[request.stage] = {"system": request.system_prompt, "user": request.user_prompt}
+
+    try:
+        step_result = run_single_stage(
+            stage=request.stage,
+            prospect=request.prospect,
+            source_company=request.source_company,
+            prompts=prompts,
+            context=request.context,
+        )
+        return step_result.model_dump()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.post("/api/council/run", response_model=CouncilRunResult)
 def council_run(request: CouncilRunRequest) -> CouncilRunResult:
     result = run_council(
@@ -1598,6 +1634,7 @@ def council_run(request: CouncilRunRequest) -> CouncilRunResult:
         source_company=request.source_company,
         skill_prompt=request.skill_prompt,
         user_prompt_template=request.user_prompt_template,
+        stage_prompts=request.stage_prompts,
     )
     try:
         pgdb.save_council_run({
