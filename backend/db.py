@@ -124,7 +124,7 @@ MIGRATIONS_SQL = [
     "ALTER TABLE council_runs ADD COLUMN IF NOT EXISTS iteration_count INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE council_runs ADD COLUMN IF NOT EXISTS pending_followups JSONB NOT NULL DEFAULT '[]'",
     "ALTER TABLE council_runs ADD COLUMN IF NOT EXISTS followup_target TEXT NOT NULL DEFAULT ''",
-    # --- microsites new columns ---
+    # --- microsites new columns (covers both schema-creation orders) ---
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS source_company TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS tenant_key TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS headline TEXT NOT NULL DEFAULT ''",
@@ -132,6 +132,12 @@ MIGRATIONS_SQL = [
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS summary TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS council_run_id TEXT",
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()",
+    # columns from db.py schema that may be missing when main.py schema won the race
+    "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS html TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'",
+    # columns from main.py schema that may be missing when db.py schema won the race
+    "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS payload JSONB NOT NULL DEFAULT '{}'",
+    "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS generated_at TIMESTAMPTZ DEFAULT now()",
     # --- indexes ---
     "CREATE INDEX IF NOT EXISTS idx_council_runs_tenant_created ON council_runs(tenant_key, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_microsites_tenant_created ON microsites(tenant_key, created_at DESC)",
@@ -168,6 +174,13 @@ MIGRATIONS_SQL = [
         updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
     )""",
     "CREATE INDEX IF NOT EXISTS idx_council_prompt_tenant_stage ON council_prompt_library(tenant_key, stage, updated_at DESC)",
+    # --- backfill html from council_runs for rows that were saved without it ---
+    """UPDATE microsites m
+       SET html = cr.final_html
+       FROM council_runs cr
+       WHERE m.council_run_id = cr.run_id
+         AND (m.html IS NULL OR m.html = '')
+         AND cr.final_html <> ''""",
 ]
 
 

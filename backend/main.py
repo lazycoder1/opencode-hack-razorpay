@@ -2284,10 +2284,36 @@ def get_council_run_detail(run_id: str) -> dict[str, Any]:
 
 @app.get("/m/{slug}", response_class=HTMLResponse)
 def serve_microsite_html(slug: str) -> HTMLResponse:
-    html = pgdb.get_microsite_html(slug)
-    if not html:
-        raise HTTPException(status_code=404, detail=f"Microsite '{slug}' not found")
-    return HTMLResponse(content=html, status_code=200)
+    # Primary path: read from microsites.html column
+    try:
+        html = pgdb.get_microsite_html(slug)
+        if html:
+            return HTMLResponse(content=html, status_code=200)
+    except Exception:
+        logger.debug("microsites.html lookup failed for slug=%s, trying fallback", slug)
+
+    # Fallback: look up council_run_id from microsites row, then get final_html
+    try:
+        ms = pgdb.get_microsite_by_slug(slug)
+        if ms and ms.get("council_run_id"):
+            run = pgdb.get_council_run(ms["council_run_id"])
+            if run and run.get("final_html"):
+                return HTMLResponse(content=run["final_html"], status_code=200)
+    except Exception:
+        logger.debug("council_run fallback failed for slug=%s, trying payload", slug)
+
+    # Last resort: check if payload JSONB has been stored (from save_microsites path)
+    # and try to find the council run by scanning runs for this prospect
+    try:
+        for record in load_microsites():
+            if record.slug == slug and record.generation_run_id:
+                run = pgdb.get_council_run(record.generation_run_id)
+                if run and run.get("final_html"):
+                    return HTMLResponse(content=run["final_html"], status_code=200)
+    except Exception:
+        logger.debug("payload-based fallback also failed for slug=%s", slug)
+
+    raise HTTPException(status_code=404, detail=f"Microsite '{slug}' not found")
 
 
 @app.get("/api/microsites-db")
