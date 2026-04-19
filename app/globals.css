@@ -1359,6 +1359,52 @@ button {
   to { transform: rotate(360deg); }
 }
 
+.sandboxResearchGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.sandboxResearchContent {
+  max-height: 480px;
+  overflow-y: auto;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: var(--muted-strong);
+}
+
+.sandboxResearchContent p {
+  margin: 0 0 4px;
+}
+
+.stepAgentBadge {
+  display: inline-flex;
+  margin-left: 10px;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(139, 125, 255, 0.08);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.stepMetrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.stepMetrics span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .navLink.active {
   border-color: var(--line-strong);
   background: rgba(255, 255, 255, 0.06);

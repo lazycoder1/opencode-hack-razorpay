@@ -1565,6 +1565,50 @@ def sandbox_generate_compat(request: SandboxStepRequest) -> SandboxStepResult:
     return sandbox_step_generate(request)
 
 
+# ---------------------------------------------------------------------------
+# Council endpoints
+# ---------------------------------------------------------------------------
+
+from backend.council import CouncilRunResult, run_council  # noqa: E402
+
+
+class CouncilRunRequest(BaseModel):
+    prospect: str = Field(description="Prospect company name")
+    source_company: str = Field(description="Source/seller company name")
+    skill_prompt: str = Field(description="Skill/system prompt for the generator agent")
+    user_prompt_template: str = Field(description="User prompt template with {{company_name}} and {{source_company}}")
+
+
+COUNCIL_RUNS_PATH = DATA_DIR / "council_runs.json"
+
+
+def save_council_run(record: CouncilRunResult) -> None:
+    runs: list[dict[str, Any]] = []
+    if COUNCIL_RUNS_PATH.exists():
+        runs = load_json_list(COUNCIL_RUNS_PATH)
+    runs = [record.model_dump(), *runs]
+    save_json_list(COUNCIL_RUNS_PATH, runs[:100])
+
+
+@app.post("/api/council/run", response_model=CouncilRunResult)
+def council_run(request: CouncilRunRequest) -> CouncilRunResult:
+    result = run_council(
+        prospect=request.prospect,
+        source_company=request.source_company,
+        skill_prompt=request.skill_prompt,
+        user_prompt_template=request.user_prompt_template,
+    )
+    save_council_run(result)
+    return result
+
+
+@app.get("/api/council/runs")
+def list_council_runs() -> list[dict[str, Any]]:
+    if not COUNCIL_RUNS_PATH.exists():
+        return []
+    return load_json_list(COUNCIL_RUNS_PATH)
+
+
 @app.get("/api/observability/requests", response_model=list[ApiRequestEvent])
 def list_api_requests(limit: int = 50) -> list[ApiRequestEvent]:
     return load_request_events()[:limit]

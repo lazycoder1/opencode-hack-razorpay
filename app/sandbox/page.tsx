@@ -38,15 +38,10 @@ NEVER use generic AI aesthetics. No purple gradients on white. No predictable la
 
 const DEFAULT_PROMPT = `Create a sales microsite for a partnership pitch: {{source_company}} selling to {{company_name}}.
 
-Context:
-- {{source_company}} is the source company pitching their product.
-- {{company_name}} is the prospect being pitched to.
-- The microsite should pitch how {{source_company}}'s capabilities can power {{company_name}}'s growth.
-
 The microsite should include:
 1. A bold hero section with a compelling headline about the {{source_company}} x {{company_name}} opportunity
 2. 3-4 key value propositions specific to what {{source_company}} can offer {{company_name}}
-3. Relevant stats or proof points (can use general industry stats)
+3. Relevant stats or proof points grounded in the research provided
 4. A clear CTA section
 5. Footer with both brand marks referenced
 
@@ -54,8 +49,9 @@ Make it feel premium and modern. The design should reflect the speed and scale o
 
 Remember: Return ONLY the raw HTML. No markdown, no code fences, no explanation.`;
 
-type StepResult = {
+type AgentStep = {
   step_name: string;
+  agent_role: string;
   status: string;
   started_at: string;
   duration_ms: number;
@@ -64,10 +60,11 @@ type StepResult = {
   input_tokens: number | null;
   output_tokens: number | null;
   total_tokens: number | null;
+  cost_usd: number | null;
   metadata: Record<string, unknown>;
 };
 
-type SandboxRun = {
+type CouncilRun = {
   run_id: string;
   prospect: string;
   source_company: string;
@@ -75,8 +72,28 @@ type SandboxRun = {
   started_at: string;
   completed_at: string;
   total_duration_ms: number;
-  steps: StepResult[];
+  total_cost_usd: number;
+  steps: AgentStep[];
+  seller_research: string;
+  prospect_research: string;
+  generation_plan: string;
+  review_notes: string;
   final_html: string;
+};
+
+const AGENT_LABELS: Record<string, string> = {
+  manager: "Manager",
+  seller_researcher: "Seller Researcher",
+  prospect_researcher: "Prospect Researcher",
+  generator: "Microsite Generator",
+};
+
+const STEP_LABELS: Record<string, string> = {
+  manager_plan: "Plan research",
+  seller_research: "Research seller",
+  prospect_research: "Research prospect",
+  manager_review: "Review research",
+  generate_microsite: "Generate HTML",
 };
 
 export default function SandboxPage() {
@@ -84,137 +101,52 @@ export default function SandboxPage() {
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [prospect, setProspect] = useState("Zepto");
   const [sourceCompany, setSourceCompany] = useState("Razorpay");
-  const [run, setRun] = useState<SandboxRun | null>(null);
-  const [activeStep, setActiveStep] = useState<string | null>(null);
+  const [run, setRun] = useState<CouncilRun | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [viewMode, setViewMode] = useState<"preview" | "source" | "trace">("preview");
+  const [viewMode, setViewMode] = useState<"preview" | "source" | "trace" | "research">("trace");
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  async function runFullPipeline() {
+  async function runCouncil() {
     setLoading(true);
     setError("");
     setRun(null);
-    setActiveStep("render_prompt");
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/sandbox/run`, {
+      const response = await fetch(`${apiBaseUrl}/api/council/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          system_prompt: skill,
-          user_prompt: prompt,
           prospect,
           source_company: sourceCompany,
+          skill_prompt: skill,
+          user_prompt_template: prompt,
         }),
       });
 
       if (!response.ok) {
         const detail = await response.text();
-        throw new Error(`Pipeline failed (${response.status}): ${detail}`);
+        throw new Error(`Council run failed (${response.status}): ${detail}`);
       }
 
-      const data: SandboxRun = await response.json();
+      const data: CouncilRun = await response.json();
       setRun(data);
-      setActiveStep(null);
-      setViewMode("preview");
+      setViewMode(data.final_html ? "preview" : "trace");
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Pipeline failed");
-      setActiveStep(null);
+      setError(caughtError instanceof Error ? caughtError.message : "Council run failed");
     } finally {
       setLoading(false);
     }
   }
-
-  async function runSingleStep(stepName: "render_prompt" | "generate") {
-    setLoading(true);
-    setError("");
-    setActiveStep(stepName);
-
-    try {
-      let endpoint = "";
-      let body: Record<string, string | null> = {};
-
-      if (stepName === "render_prompt") {
-        endpoint = "/api/sandbox/step/render-prompt";
-        body = { system_prompt: skill, user_prompt: prompt, prospect, source_company: sourceCompany };
-      } else {
-        const renderedPrompt = prompt
-          .replace(/\{\{company_name\}\}/g, prospect)
-          .replace(/\{\{source_company\}\}/g, sourceCompany);
-        endpoint = "/api/sandbox/step/generate";
-        body = { system_prompt: skill, user_prompt: renderedPrompt };
-      }
-
-      const response = await fetch(`${apiBaseUrl}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const detail = await response.text();
-        throw new Error(`Step failed (${response.status}): ${detail}`);
-      }
-
-      const stepResult: StepResult = await response.json();
-
-      if (stepName === "generate") {
-        let html = stepResult.output;
-        if (html.includes("```html")) {
-          html = html.replace(/```html\n?/g, "").replace(/```\n?/g, "");
-        }
-
-        setRun((prev) => {
-          const steps = [...(prev?.steps ?? []), stepResult];
-          return {
-            run_id: prev?.run_id ?? "manual",
-            prospect,
-            source_company: sourceCompany,
-            status: stepResult.status === "completed" ? "completed" : "failed",
-            started_at: prev?.started_at ?? stepResult.started_at,
-            completed_at: stepResult.started_at,
-            total_duration_ms: steps.reduce((sum, s) => sum + s.duration_ms, 0),
-            steps,
-            final_html: html.trim(),
-          };
-        });
-        setViewMode("preview");
-      } else {
-        setRun((prev) => {
-          const steps = [stepResult, ...(prev?.steps.slice(1) ?? [])];
-          return {
-            run_id: prev?.run_id ?? "manual",
-            prospect,
-            source_company: sourceCompany,
-            status: "partial",
-            started_at: stepResult.started_at,
-            completed_at: prev?.completed_at ?? "",
-            total_duration_ms: steps.reduce((sum, s) => sum + s.duration_ms, 0),
-            steps,
-            final_html: prev?.final_html ?? "",
-          };
-        });
-        setViewMode("trace");
-      }
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Step failed");
-    } finally {
-      setActiveStep(null);
-      setLoading(false);
-    }
-  }
-
-  const genStep = run?.steps.find((s) => s.step_name === "generate_html");
 
   return (
     <main className="pageShell">
       <nav className="topbar">
         <div className="brand">
-          <div className="brandIcon">SB</div>
+          <div className="brandIcon">CA</div>
           <div className="brandBlock">
-            <strong className="brandTitle">Generation Sandbox</strong>
-            <span className="brandCaption">Modular step runner</span>
+            <strong className="brandTitle">Council of Agents</strong>
+            <span className="brandCaption">Manager + researchers + generator</span>
           </div>
         </div>
 
@@ -228,11 +160,12 @@ export default function SandboxPage() {
 
       <section className="pageIntro">
         <div>
-          <p className="kicker">Prompt engineering</p>
-          <h1 className="pageTitle">Run each pipeline step independently or execute the full flow.</h1>
+          <p className="kicker">Agent council</p>
+          <h1 className="pageTitle">Manager plans, researchers investigate, generator builds.</h1>
           <p className="sectionText">
-            Each step produces observability-compatible metadata. Run the full pipeline or trigger individual
-            steps to iterate on the skill, prompt, or prospect targeting.
+            The council runs 5 steps: Manager plans research, Seller Researcher and Prospect Researcher
+            run in parallel, Manager reviews quality, then the Generator produces a full HTML microsite
+            grounded in real research. Every step is traced with duration, tokens, and cost.
           </p>
         </div>
       </section>
@@ -242,20 +175,8 @@ export default function SandboxPage() {
       <section className="sandboxInputRow">
         <label className="fieldStack sandboxField">
           <div className="fieldTop">
-            <strong>Prospect</strong>
-            <span className="fieldHint">Target company</span>
-          </div>
-          <input
-            className="prospectInput sandboxInput"
-            value={prospect}
-            onChange={(e) => setProspect(e.target.value)}
-            placeholder="Zepto"
-          />
-        </label>
-        <label className="fieldStack sandboxField">
-          <div className="fieldTop">
-            <strong>Source company</strong>
-            <span className="fieldHint">Your company</span>
+            <strong>Source company (seller)</strong>
+            <span className="fieldHint">Who is pitching</span>
           </div>
           <input
             className="prospectInput sandboxInput"
@@ -264,32 +185,44 @@ export default function SandboxPage() {
             placeholder="Razorpay"
           />
         </label>
+        <label className="fieldStack sandboxField">
+          <div className="fieldTop">
+            <strong>Prospect (target)</strong>
+            <span className="fieldHint">Who is being pitched to</span>
+          </div>
+          <input
+            className="prospectInput sandboxInput"
+            value={prospect}
+            onChange={(e) => setProspect(e.target.value)}
+            placeholder="Zepto"
+          />
+        </label>
       </section>
 
       <section className="sandboxGrid">
         <div className="panel sandboxEditor">
           <div className="panelHeader compactHeader">
             <div>
-              <p className="kicker">Step 1 &middot; System prompt</p>
-              <h2 className="sectionTitle">Skill instructions</h2>
+              <p className="kicker">Generator skill</p>
+              <h2 className="sectionTitle">System prompt for the Generator agent</h2>
             </div>
-            <span className="badge">Sent as system message</span>
+            <span className="badge">Controls HTML output style</span>
           </div>
           <textarea
             className="sandboxTextarea"
             value={skill}
             onChange={(e) => setSkill(e.target.value)}
-            placeholder="Skill/system prompt..."
+            placeholder="Skill/system prompt for the generator..."
           />
         </div>
 
         <div className="panel sandboxEditor">
           <div className="panelHeader compactHeader">
             <div>
-              <p className="kicker">Step 2 &middot; User prompt</p>
-              <h2 className="sectionTitle">Generation template</h2>
+              <p className="kicker">Generator prompt template</p>
+              <h2 className="sectionTitle">User prompt with research injected</h2>
             </div>
-            <span className="badge">{"{{company_name}}"} and {"{{source_company}}"} get replaced</span>
+            <span className="badge">Research is appended automatically</span>
           </div>
           <textarea
             className="sandboxTextarea sandboxTextareaShort"
@@ -305,28 +238,10 @@ export default function SandboxPage() {
           <button
             className="buttonPrimary"
             type="button"
-            disabled={loading || !skill.trim() || !prompt.trim() || !prospect.trim()}
-            onClick={runFullPipeline}
+            disabled={loading || !skill.trim() || !prompt.trim() || !prospect.trim() || !sourceCompany.trim()}
+            onClick={runCouncil}
           >
-            {loading && activeStep === "render_prompt" ? "Running pipeline..." : "Run full pipeline"}
-          </button>
-
-          <button
-            className="buttonSecondary"
-            type="button"
-            disabled={loading || !prompt.trim() || !prospect.trim()}
-            onClick={() => runSingleStep("render_prompt")}
-          >
-            {activeStep === "render_prompt" && loading ? "Rendering..." : "Step: Render prompt"}
-          </button>
-
-          <button
-            className="buttonSecondary"
-            type="button"
-            disabled={loading || !skill.trim() || !prompt.trim() || !prospect.trim()}
-            onClick={() => runSingleStep("generate")}
-          >
-            {activeStep === "generate" && loading ? "Generating..." : "Step: Generate HTML"}
+            {loading ? "Council running..." : "Run council pipeline"}
           </button>
 
           <button
@@ -348,168 +263,182 @@ export default function SandboxPage() {
         <section className="panel sandboxLoading">
           <div className="sandboxSpinner" />
           <div>
-            <p className="kicker">
-              {activeStep === "render_prompt" ? "Rendering prompt" : activeStep === "generate" ? "Generating HTML" : "Running pipeline"}
-            </p>
+            <p className="kicker">Council executing</p>
             <h2 className="sectionTitle">
-              {activeStep === "generate" || !activeStep
-                ? "The LLM is writing a full HTML microsite. This takes 20-60 seconds."
-                : "Rendering the prompt template with prospect variables."}
+              5 agents running: plan, research seller, research prospect, review, generate. This takes 30-90 seconds.
             </h2>
+            <p className="sectionText">
+              The Manager plans, two Researchers run in parallel, the Manager reviews, then the Generator builds HTML from grounded research.
+            </p>
           </div>
         </section>
       ) : null}
 
       {run && !loading ? (
-        <>
-          <section className="sandboxPreview">
-            <div className="previewHeader">
-              <div>
-                <p className="kicker">Run output &middot; {run.prospect}</p>
-                <h2 className="sectionTitle">
-                  {run.status === "completed" ? "Generated HTML microsite" : run.status === "partial" ? "Partial run" : "Run failed"}
-                </h2>
-              </div>
-              <div className="navCluster">
-                <button
-                  className={`navLink ${viewMode === "preview" ? "active" : ""}`}
-                  type="button"
-                  onClick={() => setViewMode("preview")}
-                >
+        <section className="sandboxPreview">
+          <div className="previewHeader">
+            <div>
+              <p className="kicker">{run.source_company} x {run.prospect} &middot; {run.status}</p>
+              <h2 className="sectionTitle">Council run complete</h2>
+            </div>
+            <div className="navCluster">
+              {run.final_html ? (
+                <button className={`navLink ${viewMode === "preview" ? "active" : ""}`} type="button" onClick={() => setViewMode("preview")}>
                   Preview
                 </button>
-                <button
-                  className={`navLink ${viewMode === "source" ? "active" : ""}`}
-                  type="button"
-                  onClick={() => setViewMode("source")}
-                >
+              ) : null}
+              <button className={`navLink ${viewMode === "research" ? "active" : ""}`} type="button" onClick={() => setViewMode("research")}>
+                Research
+              </button>
+              <button className={`navLink ${viewMode === "trace" ? "active" : ""}`} type="button" onClick={() => setViewMode("trace")}>
+                Trace
+              </button>
+              {run.final_html ? (
+                <button className={`navLink ${viewMode === "source" ? "active" : ""}`} type="button" onClick={() => setViewMode("source")}>
                   Source
                 </button>
+              ) : null}
+              {run.final_html ? (
                 <button
-                  className={`navLink ${viewMode === "trace" ? "active" : ""}`}
+                  className="buttonTertiary"
                   type="button"
-                  onClick={() => setViewMode("trace")}
+                  onClick={() => {
+                    const blob = new Blob([run.final_html], { type: "text/html" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${sourceCompany.toLowerCase()}-x-${prospect.toLowerCase()}.html`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
                 >
-                  Trace
+                  Download
                 </button>
-                {run.final_html ? (
-                  <button
-                    className="buttonTertiary"
-                    type="button"
-                    onClick={() => {
-                      const blob = new Blob([run.final_html], { type: "text/html" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `${sourceCompany.toLowerCase()}-x-${prospect.toLowerCase()}.html`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                  >
-                    Download HTML
-                  </button>
-                ) : null}
-              </div>
+              ) : null}
             </div>
+          </div>
 
-            {viewMode === "preview" && run.final_html ? (
-              <div className="frameShell sandboxFrame">
-                <div className="frameBar">
-                  <div className="browserDots">
-                    <span />
-                    <span />
-                    <span />
+          <div className="metricGrid metricGridFour compactMetrics">
+            <article className="metricCard">
+              <span>Total duration</span>
+              <strong>{(run.total_duration_ms / 1000).toFixed(1)}s</strong>
+            </article>
+            <article className="metricCard">
+              <span>Total cost</span>
+              <strong>${run.total_cost_usd.toFixed(4)}</strong>
+            </article>
+            <article className="metricCard">
+              <span>Steps</span>
+              <strong>{run.steps.length} agents</strong>
+            </article>
+            <article className="metricCard">
+              <span>Status</span>
+              <strong>{run.status}</strong>
+            </article>
+          </div>
+
+          {viewMode === "preview" && run.final_html ? (
+            <div className="frameShell sandboxFrame">
+              <div className="frameBar">
+                <div className="browserDots"><span /><span /><span /></div>
+                <div className="frameAddress">{sourceCompany.toLowerCase()}-x-{prospect.toLowerCase()}.html</div>
+                <div className="frameRoute">{run.status}</div>
+              </div>
+              <iframe
+                ref={iframeRef}
+                className="sandboxIframe"
+                srcDoc={run.final_html}
+                sandbox="allow-scripts allow-same-origin"
+                title="Generated microsite preview"
+              />
+            </div>
+          ) : null}
+
+          {viewMode === "research" ? (
+            <div className="sandboxResearchGrid">
+              <article className="panel detailPanel">
+                <div className="panelHeader compactHeader">
+                  <div>
+                    <p className="kicker">Seller research</p>
+                    <h2 className="sectionTitle">{run.source_company}</h2>
                   </div>
-                  <div className="frameAddress">{sourceCompany.toLowerCase()}-x-{prospect.toLowerCase()}.html</div>
-                  <div className="frameRoute">{run.status}</div>
                 </div>
-                <iframe
-                  ref={iframeRef}
-                  className="sandboxIframe"
-                  srcDoc={run.final_html}
-                  sandbox="allow-scripts allow-same-origin"
-                  title="Generated microsite preview"
-                />
-              </div>
-            ) : null}
-
-            {viewMode === "preview" && !run.final_html ? (
-              <div className="emptyPanel">
-                <p>No HTML output yet. Run the generate step or the full pipeline.</p>
-              </div>
-            ) : null}
-
-            {viewMode === "source" ? (
-              <div className="panel sandboxSource">
-                <pre className="sandboxCode">{run.final_html || "No HTML output yet."}</pre>
-              </div>
-            ) : null}
-
-            {viewMode === "trace" ? (
-              <div className="sandboxTrace">
-                <div className="metricGrid metricGridFour compactMetrics">
-                  <article className="metricCard">
-                    <span>Run ID</span>
-                    <strong>{run.run_id.slice(0, 8)}</strong>
-                  </article>
-                  <article className="metricCard">
-                    <span>Status</span>
-                    <strong>{run.status}</strong>
-                  </article>
-                  <article className="metricCard">
-                    <span>Total duration</span>
-                    <strong>{(run.total_duration_ms / 1000).toFixed(1)}s</strong>
-                  </article>
-                  <article className="metricCard">
-                    <span>Steps</span>
-                    <strong>{run.steps.length}</strong>
-                  </article>
-                </div>
-
-                {genStep ? (
-                  <div className="metricGrid metricGridFour compactMetrics">
-                    <article className="metricCard">
-                      <span>Model</span>
-                      <strong>{genStep.model_name ?? "-"}</strong>
-                    </article>
-                    <article className="metricCard">
-                      <span>LLM duration</span>
-                      <strong>{(genStep.duration_ms / 1000).toFixed(1)}s</strong>
-                    </article>
-                    <article className="metricCard">
-                      <span>Tokens in</span>
-                      <strong>{genStep.input_tokens ?? "-"}</strong>
-                    </article>
-                    <article className="metricCard">
-                      <span>Tokens out</span>
-                      <strong>{genStep.output_tokens ?? "-"}</strong>
-                    </article>
-                  </div>
-                ) : null}
-
-                <div className="stepList">
-                  {run.steps.map((step, index) => (
-                    <article className="stepItem" key={`${step.step_name}-${index}`}>
-                      <div className="stepHead">
-                        <strong>{step.step_name}</strong>
-                        <span>{step.duration_ms.toFixed(2)} ms</span>
-                      </div>
-                      <p className="stepStatus">{step.status}</p>
-                      {Object.keys(step.metadata).length > 0 ? (
-                        <pre className="stepMeta">{JSON.stringify(step.metadata, null, 2)}</pre>
-                      ) : null}
-                    </article>
+                <div className="sandboxResearchContent">
+                  {run.seller_research.split("\n").map((line, i) => (
+                    <p key={i}>{line || "\u00A0"}</p>
                   ))}
                 </div>
+              </article>
+
+              <article className="panel detailPanel">
+                <div className="panelHeader compactHeader">
+                  <div>
+                    <p className="kicker">Prospect research</p>
+                    <h2 className="sectionTitle">{run.prospect}</h2>
+                  </div>
+                </div>
+                <div className="sandboxResearchContent">
+                  {run.prospect_research.split("\n").map((line, i) => (
+                    <p key={i}>{line || "\u00A0"}</p>
+                  ))}
+                </div>
+              </article>
+
+              <article className="panel detailPanel" style={{ gridColumn: "1 / -1" }}>
+                <div className="panelHeader compactHeader">
+                  <div>
+                    <p className="kicker">Manager review</p>
+                    <h2 className="sectionTitle">Quality assessment</h2>
+                  </div>
+                </div>
+                <div className="sandboxResearchContent">
+                  {run.review_notes.split("\n").map((line, i) => (
+                    <p key={i}>{line || "\u00A0"}</p>
+                  ))}
+                </div>
+              </article>
+            </div>
+          ) : null}
+
+          {viewMode === "trace" ? (
+            <div className="sandboxTrace">
+              <div className="stepList">
+                {run.steps.map((step, index) => (
+                  <article className="stepItem" key={`${step.step_name}-${index}`}>
+                    <div className="stepHead">
+                      <div>
+                        <strong>{STEP_LABELS[step.step_name] ?? step.step_name}</strong>
+                        <span className="stepAgentBadge">{AGENT_LABELS[step.agent_role] ?? step.agent_role}</span>
+                      </div>
+                      <span>{step.duration_ms.toFixed(0)} ms</span>
+                    </div>
+                    <div className="stepMetrics">
+                      {step.model_name ? <span>Model: {step.model_name}</span> : null}
+                      {step.input_tokens ? <span>In: {step.input_tokens}</span> : null}
+                      {step.output_tokens ? <span>Out: {step.output_tokens}</span> : null}
+                      {step.cost_usd ? <span>Cost: ${step.cost_usd.toFixed(4)}</span> : null}
+                      <span>Status: {step.status}</span>
+                    </div>
+                    {Object.keys(step.metadata).length > 0 ? (
+                      <pre className="stepMeta">{JSON.stringify(step.metadata, null, 2)}</pre>
+                    ) : null}
+                  </article>
+                ))}
               </div>
-            ) : null}
-          </section>
-        </>
+            </div>
+          ) : null}
+
+          {viewMode === "source" ? (
+            <div className="panel sandboxSource">
+              <pre className="sandboxCode">{run.final_html || "No HTML output."}</pre>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       {!run && !loading ? (
         <section className="emptyPanel">
-          <p>Configure the skill and prompt, then run the full pipeline or trigger individual steps.</p>
+          <p>Configure the seller, prospect, skill, and prompt. Then run the full council pipeline.</p>
         </section>
       ) : null}
     </main>
