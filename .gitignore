@@ -5,3 +5,6 @@ dist/
 coverage/
 npm-debug.log*
 backend/.env.prod
+backend/__pycache__/
+*.pyc
+tsconfig.tsbuildinfo

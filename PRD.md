@@ -1,207 +1,390 @@
-# Sales Collateral Microsite MVP PRD
+# Batch Microsite Generator PRD
 
 ## Product Summary
 
-Build an agentic, configurable system that creates ABX-style sales collateral microsites vendors can send to prospects instead of static PPTs. The working example is `vendor x prospect`, such as `enmovil x target-account`, but `enmovil.ai` is only a placeholder.
+Build a system that lets a user upload or enter a list of companies, click `Generate`, and create a unique sales microsite for each company.
 
-The MVP should optimize for speed to first demo, while keeping every major step reviewable and editable before moving forward.
+The product has four core surfaces for today:
+
+- a create page to input or upload target companies
+- a research page to research those company websites before generation
+- a generation workflow that creates microsites for all targets using an agentic pipeline
+- a `/microsites` page to browse generated microsites and open each unique microsite URL
+
+This should optimize for speed to first usable version, not full workflow completeness.
+
+## Team Split For Now
+
+The work should be split into two parallel tracks:
+
+- Research track: owned separately, focused on company input, research prompt editing, website research, and stored research artifacts.
+- Microsite track: owned here for now, focused on listing microsites, unique microsite routes, and generating microsites from stored research outputs.
+
+The two tracks must integrate through a stable backend contract rather than shared in-memory frontend state.
 
 ## Problem
 
-Sales teams need lightweight, tailored collateral for prospecting, but today the workflow is slow, manual, and locked inside decks. We want a microsite workflow that:
-
-- researches the vendor website to learn design language, theme, and messaging
-- researches the prospect to identify public signals and likely challenges
-- turns both into a sendable microsite draft
-- includes a chat experience that acts as a sales copilot
-- lets a human review and refine each stage before proceeding
+Sales and growth teams want to generate personalized microsites for many accounts, but doing this one-by-one is too slow. The system should batch that work so a user can go from account list to a set of unique microsite pages in one run.
 
 ## Primary User
 
-An internal sales, growth, or marketing operator creating an ABX microsite for a target account.
+An internal operator creating outbound sales microsites for multiple target accounts.
 
-## MVP Goal
+## Goals For Today
 
-Given only:
+1. A page where the user can either paste a list of companies or upload an Excel file.
+2. A research page where we can research the websites for those companies.
+3. A `Generate` action that creates microsites for every company in the list.
+4. A `/microsites` page with a dropdown or selector to browse all generated microsites.
+5. Each microsite must live at its own unique route.
 
-- vendor company URL
-- prospect company URL
+## MVP Scope
 
-the system should generate stage-by-stage outputs, stop for approval at each stage, allow the user to chat and refine outputs, and finally produce a sendable microsite draft/link.
+### In Scope
 
-## Product Principles
+- manual list entry for companies
+- Excel upload for company lists
+- parsing uploaded spreadsheet rows into a company target list
+- company website research page and stored research outputs
+- batch generation job kickoff
+- agentic generation flow per company
+- persistence of generated microsites
+- `/microsites` index page with dropdown selection
+- unique microsite page for each generated microsite
 
-- Agentic by default: each major step should be handled by an explicit agent or configurable pipeline step.
-- Configurable inputs: skills, template skill, extracted theme, prompts, and other generation settings should be swappable inputs, not hardcoded logic.
-- Approval-gated: do not auto-advance to the next stage without user approval.
-- Evidence-aware: do not invent prospect-specific claims. In early interactions, stay with general trends, public signals, and discovery-oriented positioning.
-- Framework-agnostic: do not assume a fixed frontend or backend stack unless the user later chooses one.
-- Cache where possible: research and generation outputs should be reusable so repeated runs are fast.
+### Current Delivery Focus
 
-## End-to-End Workflow
+For the microsite-side implementation we should prioritize:
 
-### Stage 1: Vendor Research
+- `/microsites` page
+- unique microsite detail route
+- microsite persistence
+- generation flow that reads stored research outputs
 
-Input:
+The research UI can be developed in parallel as long as it writes the agreed backend records.
 
-- vendor company URL
+### Out Of Scope For Today
 
-Tasks:
+- advanced user auth and permissions
+- polished retry dashboards and deep observability UX
+- rich editing after generation
+- CRM syncing
+- persona-specific variants per stakeholder
+- multi-tenant billing and quotas
 
-- crawl and summarize the vendor website
-- extract design language, visual theme, tone, and content patterns
-- identify product positioning, ICP clues, proof points, and CTAs
-- store reusable research artifacts in cache
+## User Experience
 
-Output:
+### Page 1: Create
 
-- vendor research summary
-- extracted theme/design profile
-- reusable brand and messaging profile
+Primary purpose: accept a target list and start batch generation.
 
-Gate:
+Inputs:
 
-- wait for human approval or edits before moving on
+- vendor/company context for the sender side
+- either a pasted list of companies or an uploaded Excel file
+- editable research prompt for the uploaded/pasted company list
 
-### Stage 2: Prospect Research
+User actions:
 
-Input:
+- paste company names or URLs into a text area
+- upload `.xlsx` or `.csv`
+- review parsed companies
+- edit the research prompt before running batch research
+- click `Generate`
 
-- prospect company URL
-- approved vendor context from Stage 1
+Outputs:
 
-Tasks:
+- list of accepted companies
+- active research prompt for the batch
+- generation status for the current batch
+- link to browse finished microsites
 
-- research the prospect using public sources
-- identify likely business context, public initiatives, industry trends, and generic problem themes
-- prepare discovery-oriented hypotheses instead of overconfident personalization
-- store reusable research artifacts in cache
+### Page 2: Research
 
-Output:
+Primary purpose: research the websites for companies in the batch before microsite generation.
 
-- prospect research summary
-- likely challenges and opportunity themes
-- discovery questions and initial angle recommendations
+Route shape:
 
-Gate:
+- `/research`
+- optionally `/research/[batchId]`
 
-- wait for human approval or edits before moving on
+User actions:
 
-### Stage 3: Microsite Draft Generation
+- select a batch
+- view all companies in that batch
+- run website research for one company or the full batch
+- review stored research outputs per company
+- re-run research for a company if needed
+- approve the batch for microsite generation
 
-Input:
+Outputs:
 
-- approved vendor research
-- approved prospect research
-- configurable template skill
-- configurable generation skills/prompts
+- research status per company
+- normalized website/company inputs
+- research prompt used for the run
+- research summary per company
+- extracted facts, themes, and notes that will feed generation
 
-Tasks:
+### Page 3: `/microsites`
 
-- create the microsite structure and copy
-- apply the extracted vendor theme to the microsite
-- generate sections that are useful for first outreach
-- generate a chatbot/copilot prompt aligned to the account context
+Primary purpose: browse generated microsites.
 
-Output:
+User actions:
 
-- microsite draft
-- section plan and copy blocks
-- chatbot configuration/prompt
-- preview or microsite link
+- open a dropdown of all generated microsites
+- select one microsite
+- navigate to the selected microsite page
 
-Gate:
+Outputs:
 
-- wait for human approval or edits before publishing/finalizing
+- dropdown or searchable selector of microsites
+- metadata such as company name, generation time, and generation status
+- link/open action to the unique microsite route
 
-### Stage 4: Chat-Led Refinement
+### Page 4: Microsite Detail
 
-The user should be able to chat with the system to modify outputs at any stage. This includes:
+Route shape:
 
-- refining research summaries
-- adjusting positioning
-- changing sections, tone, or layout direction
-- improving chatbot behavior
+- `/microsites/[micrositeId]`
 
-The system should preserve stage state and use prior outputs as editable inputs instead of starting over.
+Primary purpose: render the generated microsite for a single company.
 
-## Chatbot Role
+Content can start simple for MVP:
 
-The chatbot is a sales copilot inside the microsite. For MVP it should:
+- hero/title
+- company-specific copy
+- summary/value proposition
+- generated sections from the pipeline
 
-- answer prospect-facing questions using the approved microsite context
-- guide discovery conversations
-- tailor responses to the current account context
-- recommend next steps or follow-up angles
+## Functional Requirements
 
-It should not pretend to know private prospect details that were never verified.
+### Team Boundary
 
-## Prompt Tester
+The research side is responsible for:
 
-Include a prompt testing surface or workflow so prompt changes for research and microsite generation can be tested quickly during MVP iteration.
+- creating batches and targets
+- storing the editable research prompt
+- running website research
+- persisting research artifacts and statuses
 
-## Required External Research Tool
+The microsite side is responsible for:
 
-Use Tavily for web research agents unless the user explicitly changes the tooling choice.
+- reading completed research artifacts
+- generating microsite records from those artifacts
+- rendering the `/microsites` list page
+- rendering unique microsite detail pages
 
-## Core Configurable Inputs
+Microsite generation should not depend on the research page UI directly. It should depend only on persisted research data.
 
-- vendor URL
-- prospect URL
-- research skill(s)
-- template skill
-- extracted theme/design system
-- microsite generation prompt/config
-- chatbot prompt/config
+### Company Input
 
-## Data/Artifact Expectations
+The system must support:
 
-The system should treat each stage output as a reusable artifact:
+- manual text entry of multiple companies
+- file upload of Excel spreadsheets
+- parsing rows into a normalized company list
+- rejecting empty or invalid rows
 
-- vendor research cache
-- prospect research cache
-- approved summaries
-- extracted theme tokens/profile
-- microsite draft data
-- chatbot configuration
+### Website Research
 
-These artifacts should be easy for later agents to inspect, edit, and reuse.
+The system must support:
 
-## MVP Boundaries
+- storing a website or company URL per target where available
+- storing a batch-level research prompt that the user can edit
+- running research against each company website
+- persisting research outputs so generation can reuse them
+- tracking research status independently from generation status
+- allowing re-run of research without recreating the batch
 
-In scope:
+### Batch Generation
 
-- vendor website research
-- prospect research from public web sources
-- approval-gated generation workflow
-- editable stage outputs via chat
-- microsite draft generation
-- sales copilot chatbot
-- caching
-- prompt testing workflow
+On `Generate`, the system must:
 
-Out of scope for now:
+- create a batch record
+- create a target record for each company
+- use existing research artifacts when present
+- use the stored research prompt and research outputs as the main input to microsite generation
+- start one generation workflow per company
+- store status for each company generation
 
-- deep persona-specific sections for CIO, CFO, and other decision makers at first touch
-- private CRM or internal data integrations
-- fully autonomous outreach without review
-- assuming a fixed app framework before implementation starts
+### Agentic Generation
 
-## Later Phase Direction
+Each company generation should be handled by an agentic pipeline. For MVP that means:
 
-After initial discovery interactions, the microsite should evolve to support persona-specific sections for decision-makers such as:
+- gather input company data
+- use approved or latest company research data
+- treat research outputs as the source material for microsite content creation
+- generate microsite content
+- persist the microsite content and metadata
+- mark that microsite as completed or failed
 
-- CIO
-- CFO
-- other functional heads involved in the buying committee
+The implementation does not need full autonomous coding agents today. It needs a practical generation pipeline with clear stages and persisted outputs.
 
-Those sections should be generated only after enough account context exists.
+### Microsite Storage And Retrieval
 
-## Success Criteria For MVP
+The system must store:
 
-- A user can provide vendor and prospect URLs and get meaningful staged outputs.
-- Each stage is reviewable and editable before the next stage starts.
-- The generated microsite feels aligned to the vendor's design language.
-- Prospect-facing content stays credible and discovery-oriented.
-- A chatbot can act as a useful sales copilot on the microsite.
-- The system is fast enough to demo end-to-end without rebuilding context from scratch.
+- batch
+- target company
+- research artifact(s)
+- microsite content
+- generation status
+- unique microsite identifier/slug
+
+The `/microsites` page must read from stored microsites, not from in-memory state.
+
+## Data Model
+
+Minimum entities:
+
+### Batch
+
+- `id`
+- `created_at`
+- `source_type` (`manual` or `file`)
+- `research_prompt`
+- `status`
+
+### CompanyTarget
+
+- `id`
+- `batch_id`
+- `company_name`
+- `company_url` nullable
+- `status`
+- `error_message` nullable
+
+### ResearchArtifact
+
+- `id`
+- `company_target_id`
+- `source_url` nullable
+- `summary`
+- `raw_notes_json`
+- `status`
+- `created_at`
+- `updated_at`
+
+### Integration Contract
+
+Minimum data the microsite flow needs from research:
+
+- `company_target_id`
+- `company_name`
+- `source_url` if available
+- `research_prompt`
+- `summary`
+- `raw_notes_json`
+- `status`
+
+Minimum readiness rule:
+
+- a company can be generated into a microsite when its research artifact status is `completed`
+
+### Microsite
+
+- `id`
+- `company_target_id`
+- `slug`
+- `title`
+- `content_json` or `content_markdown`
+- `status`
+- `created_at`
+- `updated_at`
+
+## Generation Flow
+
+1. User submits companies manually or through Excel upload.
+2. Backend parses and stores the batch.
+3. User opens the research page for that batch.
+4. Backend creates research jobs for each company website.
+5. Research artifacts are stored per company.
+6. Microsite flow reads completed research artifacts.
+7. Backend creates generation jobs for each company.
+8. Worker/agent pipeline generates microsites from stored research.
+9. Generated microsites are persisted with unique slugs.
+10. `/microsites` reads all generated microsites.
+11. User opens a unique microsite page.
+
+## API Expectations
+
+Minimum backend endpoints:
+
+- `POST /api/batches/manual`
+- `POST /api/batches/upload`
+- `PATCH /api/batches/{batchId}/research-prompt`
+- `POST /api/batches/{batchId}/research`
+- `POST /api/company-targets/{companyTargetId}/research`
+- `GET /api/batches/{batchId}/research`
+- `POST /api/batches/{batchId}/generate`
+- `POST /api/company-targets/{companyTargetId}/generate`
+- `GET /api/batches/{batchId}`
+- `GET /api/microsites`
+- `GET /api/microsites/{micrositeId}`
+- `GET /api/microsites/by-slug/{slug}`
+
+## Non-Functional Requirements
+
+- Generation must be asynchronous. Do not block the request until every microsite finishes.
+- Research must be asynchronous for the same reason.
+- Failed companies should not fail the entire batch.
+- Each microsite must have a stable unique route.
+- Research outputs must be persisted and reusable.
+- The UI should show partial progress as microsites complete.
+- The UI should show partial progress as research completes.
+- Local development should work with the current Next.js frontend and FastAPI backend setup.
+
+## Success Criteria
+
+- A user can input multiple companies manually.
+- A user can upload an Excel file and see parsed companies.
+- A user can edit the research prompt for that batch before running research.
+- A user can run and review website research for the companies in a batch.
+- Microsites are generated from stored research outputs, not from raw company rows alone.
+- Clicking `Generate` creates microsites for all valid companies in the batch.
+- `/microsites` lists generated microsites.
+- Each microsite opens on its own unique route.
+
+## Recommended Tools And Infra
+
+### Minimum Stack For Fast Delivery
+
+- Frontend: Next.js
+- Backend API: FastAPI
+- Database: Postgres
+- Local DB: Docker Compose Postgres on `5436`
+- File parsing: `pandas` or `openpyxl` for `.xlsx`, plus CSV parsing
+- Background jobs: FastAPI background tasks for first pass if volume is low, but prefer a proper worker queue quickly
+- Queue/cache: Redis
+- Agentic research/generation: Tavily for web research plus an LLM provider for content generation
+- Object/file storage: local disk for dev, S3/R2 in hosted environments if uploaded files need persistence
+
+### Recommended Practical Infra
+
+- Next.js app deployed on Vercel
+- FastAPI app deployed on Railway, Render, or Fly.io
+- Managed Postgres: Neon
+- Redis: Upstash or Railway Redis
+- File storage: Cloudflare R2 or S3 if uploads must be stored beyond request lifecycle
+
+### Recommendation For Today
+
+For the fastest useful version:
+
+- keep Next.js + FastAPI
+- use local Docker Postgres for dev
+- add Postgres persistence first
+- add Excel parsing next
+- use a simple async job model now
+- upgrade to Redis-backed workers once generation volume or latency becomes painful
+
+## Build Order
+
+1. Postgres-backed schema for batches, targets, research artifacts, and microsites.
+2. Manual company list entry on the create page.
+3. Excel upload and parsing.
+4. Research page and batch research endpoints.
+5. Batch generate endpoint with mocked generation.
+6. `/microsites` listing page.
+7. Unique microsite detail route.
+8. Real agentic research/generation pipeline.
