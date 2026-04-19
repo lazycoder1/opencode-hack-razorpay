@@ -192,6 +192,7 @@ export default function Home() {
         </div>
         <div className="navCluster">
           <Link className="navLink" href="/sandbox">Sandbox</Link>
+          <Link className="navLink" href="/evals">Evals</Link>
           <Link className="navLink" href="/observability">Observability</Link>
         </div>
       </nav>
