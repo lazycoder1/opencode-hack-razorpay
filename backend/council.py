@@ -35,8 +35,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Annotated, Any, TypedDict
 from uuid import uuid4
+
+
+def _merge_lists(left: list, right: list) -> list:
+    """Reducer for LangGraph: merge step lists from parallel nodes."""
+    return [*left, *right]
 
 from langchain.agents import create_agent
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -669,8 +674,8 @@ class CouncilState(TypedDict, total=False):
     followup_target: str
     used_mcp: bool
 
-    # Observability
-    steps: list[dict[str, Any]]
+    # Observability — Annotated so parallel nodes can both append
+    steps: Annotated[list[dict[str, Any]], _merge_lists]
     error: str
 
 
