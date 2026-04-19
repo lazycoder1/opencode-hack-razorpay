@@ -1359,6 +1359,225 @@ button {
   to { transform: rotate(360deg); }
 }
 
+/* ---- Demo create path ---- */
+
+.demoInputSection {
+  margin-top: 8px;
+}
+
+.demoInputGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.demoInputLeft {
+  padding-top: 12px;
+}
+
+.demoTitle {
+  margin: 0;
+  max-width: 14ch;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+}
+
+.demoInputRight {
+  display: grid;
+  gap: 14px;
+}
+
+.demoInput {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text);
+  font-size: 1rem;
+  outline: none;
+}
+
+.demoInput:focus {
+  border-color: rgba(139, 125, 255, 0.45);
+  box-shadow: 0 0 0 4px rgba(139, 125, 255, 0.08);
+}
+
+.demoTextarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.7;
+  resize: vertical;
+  outline: none;
+}
+
+.demoTextarea:focus {
+  border-color: rgba(139, 125, 255, 0.45);
+  box-shadow: 0 0 0 4px rgba(139, 125, 255, 0.08);
+}
+
+.demoButton {
+  width: 100%;
+  min-height: 52px;
+  font-size: 1rem;
+}
+
+.demoProgress {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.demoStats {
+  margin-bottom: 4px;
+}
+
+.demoProspectList {
+  display: grid;
+  gap: 10px;
+}
+
+.demoProspectCard {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.demoProspectCard:disabled {
+  cursor: default;
+}
+
+.demoProspectCard.active {
+  border-color: rgba(139, 125, 255, 0.45);
+  background: rgba(139, 125, 255, 0.06);
+}
+
+.demoProspectCard.running {
+  border-color: rgba(241, 197, 108, 0.35);
+  background: rgba(241, 197, 108, 0.04);
+}
+
+.demoProspectCard.completed {
+  border-color: rgba(121, 213, 159, 0.3);
+}
+
+.demoProspectCard.failed {
+  border-color: rgba(255, 142, 148, 0.3);
+}
+
+.demoProspectTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.demoProspectProgress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--warning);
+  font-size: 0.84rem;
+}
+
+.demoSpinner {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+
+.demoProspectMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.demoSlug {
+  color: var(--accent-2);
+}
+
+.demoPreview {
+  margin-top: 22px;
+}
+
+.demoFrame {
+  margin-top: 16px;
+}
+
+.demoTrace {
+  margin-top: 16px;
+}
+
+.demoTraceGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.demoTraceStep {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.demoTraceStepTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.demoTraceStepMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+@media (max-width: 1120px) {
+  .demoInputGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .demoTraceGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .demoTraceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .demoProspectTop {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 .cacheRow {
   display: flex;
   align-items: center;

@@ -1,389 +1,334 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
-
-type MicrositeRecord = {
-  id: string;
-  company_name: string;
-  slug: string;
-  headline: string;
-};
-
-type GenerateResponse = {
-  created: MicrositeRecord[];
-  total_count: number;
-  failed: string[];
-};
-
-type CompanyProfileRecord = {
-  id: string;
-  name: string;
-  website_url: string;
-  logo_path: string;
-  wordmark: string;
-  summary: string;
-  skills: string[];
-  brand_markdown_path: string;
-  skills_markdown_path: string;
-};
+import { useEffect, useRef, useState } from "react";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
+type AgentStep = {
+  step_name: string;
+  agent_role: string;
+  status: string;
+  duration_ms: number;
+  cost_usd: number | null;
+  model_name: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+};
+
+type CouncilRun = {
+  run_id: string;
+  prospect: string;
+  source_company: string;
+  status: string;
+  total_duration_ms: number;
+  total_cost_usd: number;
+  steps: AgentStep[];
+  final_html: string;
+  seller_research: string;
+  prospect_research: string;
+};
+
+type ProspectState = {
+  name: string;
+  status: "queued" | "running" | "completed" | "failed";
+  currentStep: string;
+  run: CouncilRun | null;
+  slug: string;
+};
+
+const STEP_LABELS: Record<string, string> = {
+  manager_plan: "Planning",
+  seller_research: "Researching seller",
+  prospect_research: "Researching prospect",
+  manager_review: "Reviewing research",
+  generate_microsite: "Generating microsite",
+};
+
+const AGENT_LABELS: Record<string, string> = {
+  manager: "Manager",
+  seller_researcher: "Seller Researcher",
+  prospect_researcher: "Prospect Researcher",
+  generator: "Generator",
+};
+
 export default function Home() {
-  const [prospects, setProspects] = useState(
-    "Northstar Logistics\nAcme Capital\nJuniper Health\nBlue Atlas Energy",
-  );
-  const [created, setCreated] = useState<MicrositeRecord[]>([]);
-  const [failed, setFailed] = useState<string[]>([]);
-  const [companyProfiles, setCompanyProfiles] = useState<CompanyProfileRecord[]>([]);
-  const [selectedCompanyProfileId, setSelectedCompanyProfileId] = useState("enmovil");
-  const [loading, setLoading] = useState(false);
+  const [sourceCompany, setSourceCompany] = useState("Razorpay");
+  const [prospectInput, setProspectInput] = useState("Zepto\nSwiggy\nCRED");
+  const [prospects, setProspects] = useState<ProspectState[]>([]);
+  const [running, setRunning] = useState(false);
+  const [selectedProspect, setSelectedProspect] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const abortRef = useRef(false);
 
-  const prospectList = useMemo(
-    () =>
-      prospects
-        .split("\n")
-        .map((item) => item.trim())
-        .filter(Boolean),
-    [prospects],
-  );
+  const prospectNames = prospectInput
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  const selectedCompanyProfile = useMemo(
-    () => companyProfiles.find((profile) => profile.id === selectedCompanyProfileId) ?? null,
-    [companyProfiles, selectedCompanyProfileId],
-  );
+  const completedCount = prospects.filter((p) => p.status === "completed").length;
+  const failedCount = prospects.filter((p) => p.status === "failed").length;
+  const totalCost = prospects.reduce((s, p) => s + (p.run?.total_cost_usd ?? 0), 0);
+  const totalDuration = prospects.reduce((s, p) => s + (p.run?.total_duration_ms ?? 0), 0);
 
-  useEffect(() => {
-    async function loadCompanyProfiles() {
+  const selected = prospects.find((p) => p.name === selectedProspect) ?? null;
+
+  async function runBatch() {
+    if (prospectNames.length === 0 || !sourceCompany.trim()) return;
+
+    setRunning(true);
+    setError("");
+    abortRef.current = false;
+
+    const initial: ProspectState[] = prospectNames.map((name) => ({
+      name,
+      status: "queued",
+      currentStep: "",
+      run: null,
+      slug: "",
+    }));
+    setProspects(initial);
+    setSelectedProspect(null);
+
+    for (let i = 0; i < initial.length; i++) {
+      if (abortRef.current) break;
+
+      const prospect = initial[i];
+
+      // Mark as running
+      setProspects((prev) => prev.map((p, idx) => (idx === i ? { ...p, status: "running", currentStep: "manager_plan" } : p)));
+
       try {
-        const response = await fetch(`${apiBaseUrl}/api/company-profiles`);
+        const response = await fetch(`${apiBaseUrl}/api/council/run`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prospect: prospect.name,
+            source_company: sourceCompany,
+          }),
+        });
+
         if (!response.ok) {
-          throw new Error(`Unable to load company profiles: ${response.status}`);
+          throw new Error(`Failed for ${prospect.name}: ${response.status}`);
         }
 
-        const data: CompanyProfileRecord[] = await response.json();
-        setCompanyProfiles(data);
-        if (data.length > 0 && !data.some((profile) => profile.id === selectedCompanyProfileId)) {
-          setSelectedCompanyProfileId(data[0].id);
+        const run: CouncilRun = await response.json();
+        const slug = `${sourceCompany.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-x-${prospect.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${run.run_id.slice(0, 6)}`;
+
+        setProspects((prev) =>
+          prev.map((p, idx) =>
+            idx === i
+              ? { ...p, status: run.status === "completed" ? "completed" : "failed", currentStep: "", run, slug }
+              : p,
+          ),
+        );
+
+        // Auto-select the first completed one
+        if (run.status === "completed" && run.final_html) {
+          setSelectedProspect(prospect.name);
         }
       } catch (caughtError) {
-        setError(caughtError instanceof Error ? caughtError.message : "Unable to load company profiles");
+        setProspects((prev) =>
+          prev.map((p, idx) => (idx === i ? { ...p, status: "failed", currentStep: "" } : p)),
+        );
+        setError(caughtError instanceof Error ? caughtError.message : `Failed for ${prospect.name}`);
       }
     }
 
-    void loadCompanyProfiles();
-  }, [selectedCompanyProfileId]);
-
-  async function handleGenerate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-
-    try {
-      const response = await fetch(`${apiBaseUrl}/api/microsites/generate-batch`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ prospects: prospectList, company_profile_id: selectedCompanyProfileId }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Generation failed with ${response.status}`);
-      }
-
-      const data: GenerateResponse = await response.json();
-      setCreated(data.created);
-      setFailed(data.failed);
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to generate microsites");
-    } finally {
-      setLoading(false);
-    }
+    setRunning(false);
   }
 
   return (
     <main className="pageShell">
       <nav className="topbar">
         <div className="brand">
-          <div className="brandIcon">MS</div>
+          <div className="brandIcon">CA</div>
           <div className="brandBlock">
-            <strong className="brandTitle">Create batch</strong>
-            <span className="brandCaption">Queue prospects and run generation</span>
+            <strong className="brandTitle">Council of Agents</strong>
+            <span className="brandCaption">Batch microsite generation</span>
           </div>
         </div>
-
         <div className="navCluster">
-          <Link className="navLink" href="/microsites">
-            Open library
-          </Link>
-          <Link className="navLink" href="/observability">
-            View runs
-          </Link>
-          <Link className="navLink" href="/signup">
-            Signup
-          </Link>
+          <Link className="navLink" href="/sandbox">Sandbox</Link>
+          <Link className="navLink" href="/observability">Observability</Link>
         </div>
       </nav>
 
-      <section className="heroGrid">
-        <article className="heroPanel">
-          <p className="kicker">Operator workspace</p>
-          <h1 className="heroTitle">Run batch microsite generation from one calm control surface.</h1>
-          <p className="heroText">
-            Queue prospects, trigger the generation pipeline, inspect provenance, and reopen every persisted
-            route. The surface should feel like a serious internal product, not a marketing page.
-          </p>
-
-          <div className="badgeRow">
-            <span className="badge">Manual intake</span>
-            <span className="badge">Persisted microsites</span>
-            <span className="badge">Run traceability</span>
+      <section className="demoInputSection">
+        <div className="demoInputGrid">
+          <div className="demoInputLeft">
+            <p className="kicker">Generate microsites</p>
+            <h1 className="demoTitle">Type prospects. Hit generate. Agents do the rest.</h1>
+            <p className="sectionText">
+              A council of 5 agents researches your company, researches each prospect, reviews the research quality, and generates a unique HTML microsite per prospect.
+            </p>
           </div>
 
-          <div className="metricGrid metricGridFour">
-            <article className="metricCard">
-              <span>Prospects queued</span>
-              <strong>{prospectList.length}</strong>
-            </article>
-            <article className="metricCard">
-              <span>Created now</span>
-              <strong>{created.length}</strong>
-            </article>
-            <article className="metricCard">
-              <span>Failed now</span>
-              <strong>{failed.length}</strong>
-            </article>
-            <article className="metricCard">
-              <span>Track</span>
-              <strong>Microsite MVP</strong>
-            </article>
-          </div>
-        </article>
-
-        <article className="browserMock heroMock">
-          <div className="browserBar">
-            <div className="browserDots">
-              <span />
-              <span />
-              <span />
-            </div>
-            <div className="browserAddress">studio://batch/generate</div>
-            <div className="browserMeta">live</div>
-          </div>
-
-          <div className="browserContent">
-            <div className="mockBlock">
-              <p className="miniLabel">Current workflow</p>
-              <div className="mockList">
-                <div className="mockListItem active">
-                  <strong>Queue prospects</strong>
-                  <span>Paste one company per line</span>
-                </div>
-                <div className="mockListItem">
-                  <strong>Run generation</strong>
-                  <span>Create one persisted route per prospect</span>
-                </div>
-                <div className="mockListItem">
-                  <strong>Inspect runs</strong>
-                  <span>Timings, tokens, and request latency</span>
-                </div>
+          <div className="demoInputRight">
+            <label className="fieldStack">
+              <div className="fieldTop">
+                <strong>Your company (seller)</strong>
               </div>
-            </div>
+              <input
+                className="demoInput"
+                value={sourceCompany}
+                onChange={(e) => setSourceCompany(e.target.value)}
+                placeholder="Razorpay"
+                disabled={running}
+              />
+            </label>
 
-            <div className="mockGrid">
-              <div className="mockCard">
-                <p className="miniLabel">Data contract</p>
-                <strong>Slug, microsite output, generation run, API request log</strong>
+            <label className="fieldStack">
+              <div className="fieldTop">
+                <strong>Prospects</strong>
+                <span className="fieldHint">{prospectNames.length} companies</span>
               </div>
-              <div className="mockCard">
-                <p className="miniLabel">Delivery focus</p>
-                <strong>
-                  {selectedCompanyProfile
-                    ? `${selectedCompanyProfile.name} brand assets, skills, and markdown are active.`
-                    : "Microsite track first. Research track stays separate."}
-                </strong>
-              </div>
-            </div>
-          </div>
-        </article>
-      </section>
+              <textarea
+                className="demoTextarea"
+                value={prospectInput}
+                onChange={(e) => setProspectInput(e.target.value)}
+                placeholder={"Zepto\nSwiggy\nCRED"}
+                disabled={running}
+              />
+            </label>
 
-      <section className="mainGrid">
-        <form className="panel formPanel" onSubmit={handleGenerate}>
-          <div className="panelHeader">
-            <div>
-              <p className="kicker">Generate</p>
-              <h2 className="sectionTitle">Paste a compact roster and run the batch.</h2>
-            </div>
-            <p className="sectionText">Today’s supported input is manual prospect entry. The UI stays explicit about that constraint.</p>
-          </div>
-
-          <label className="fieldStack" htmlFor="company-profile">
-            <div className="fieldTop">
-              <strong>Source company profile</strong>
-              <span className="fieldHint">Switches design choices, assets, skills, and markdown context for agents</span>
-            </div>
-            <select
-              id="company-profile"
-              className="companySelect"
-              value={selectedCompanyProfileId}
-              onChange={(event) => setSelectedCompanyProfileId(event.target.value)}
+            <button
+              className="buttonPrimary demoButton"
+              type="button"
+              disabled={running || prospectNames.length === 0 || !sourceCompany.trim()}
+              onClick={runBatch}
             >
-              {companyProfiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {selectedCompanyProfile ? (
-            <div className="companyProfileCard">
-              <div className="companyProfileTop">
-                <img alt={selectedCompanyProfile.name} className="companyLogo" src={selectedCompanyProfile.logo_path} />
-                <div>
-                  <p className="miniLabel">Active company</p>
-                  <strong>{selectedCompanyProfile.wordmark}</strong>
-                  <p className="statusNote">{selectedCompanyProfile.summary}</p>
-                </div>
-              </div>
-
-              <div className="miniPillRow">
-                {selectedCompanyProfile.skills.map((skill) => (
-                  <span className="miniPill" key={skill}>{skill}</span>
-                ))}
-              </div>
-
-              <div className="artifactNote">
-                <span>Loaded files</span>
-                <p>
-                  {selectedCompanyProfile.brand_markdown_path}
-                  <br />
-                  {selectedCompanyProfile.skills_markdown_path}
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          <label className="fieldStack" htmlFor="prospects">
-            <div className="fieldTop">
-              <strong>Prospect roster</strong>
-              <span className="fieldHint">{prospectList.length} valid rows</span>
-            </div>
-            <textarea
-              id="prospects"
-              className="prospectInput"
-              value={prospects}
-              onChange={(event) => setProspects(event.target.value)}
-              placeholder="Northstar Logistics&#10;Acme Capital&#10;Juniper Health&#10;Blue Atlas Energy"
-            />
-          </label>
-
-          <div className="actionRow">
-            <button className="buttonPrimary" type="submit" disabled={loading || prospectList.length === 0}>
-              {loading ? "Generating microsites..." : "Generate microsites"}
+              {running ? `Generating ${completedCount + failedCount + 1} of ${prospects.length}...` : `Generate ${prospectNames.length} microsites`}
             </button>
-            <Link className="buttonSecondary" href="/microsites">
-              Open microsite library
-            </Link>
-            <Link className="buttonTertiary" href="/observability">
-              Inspect observability
-            </Link>
           </div>
-
-          <div className="statusRow">
-            <span className={`statusChip ${loading ? "statusPending" : "statusReady"}`}>
-              {loading ? "Generation in progress" : "Ready"}
-            </span>
-            {created.length > 0 ? <span className="statusChip statusReady">Routes created</span> : null}
-            {failed.length > 0 ? <span className="statusChip statusError">Some prospects failed</span> : null}
-          </div>
-
-          {error ? <p className="errorText">{error}</p> : null}
-
-          {failed.length > 0 ? (
-            <div className="feedbackStack">
-              {failed.map((item) => (
-                <p className="errorText" key={item}>
-                  {item}
-                </p>
-              ))}
-            </div>
-          ) : null}
-        </form>
-
-        <aside className="panel flowPanel">
-          <div className="panelHeader compactHeader">
-            <div>
-              <p className="kicker">Workflow</p>
-              <h2 className="sectionTitle">One product loop, four visible surfaces.</h2>
-            </div>
-          </div>
-
-          <div className="flowList">
-            <article className="flowItem">
-              <span className="flowIndex">01</span>
-              <div>
-                <strong>Enter prospects manually</strong>
-                <p>Keep intake direct and avoid fake complexity before the demo needs it.</p>
-              </div>
-            </article>
-            <article className="flowItem">
-              <span className="flowIndex">02</span>
-              <div>
-                <strong>Generate persisted microsites</strong>
-                <p>Each company gets a unique slug and a structured output that can be reopened later.</p>
-              </div>
-            </article>
-            <article className="flowItem">
-              <span className="flowIndex">03</span>
-              <div>
-                <strong>Inspect generation quality</strong>
-                <p>Observability is part of the product surface, not a hidden admin afterthought.</p>
-              </div>
-            </article>
-            <article className="flowItem">
-              <span className="flowIndex">04</span>
-              <div>
-                <strong>Use the microsite as the artifact</strong>
-                <p>Generated pages should feel credible, first-touch safe, and ready for later research enrichment.</p>
-              </div>
-            </article>
-          </div>
-        </aside>
+        </div>
       </section>
 
-      <section className="panel resultsPanel">
-        <div className="panelHeader">
-          <div>
-            <p className="kicker">Latest output</p>
-            <h2 className="sectionTitle">Recent routes from this session.</h2>
-          </div>
-          <p className="sectionText">Successful outputs stay close to the operator so the next action is obvious.</p>
-        </div>
-
-        {created.length === 0 ? (
-          <div className="emptyPanel">
-            <p>No microsites generated in this session yet.</p>
-          </div>
-        ) : (
-          <div className="resultGrid">
-            {created.map((item) => (
-              <article className="resultCard" key={item.id}>
-                <p className="miniLabel">{item.company_name}</p>
-                <h3>{item.headline}</h3>
-                <p className="resultRoute">/{item.slug}</p>
-                <Link className="textLink" href={`/microsites/${item.slug}`}>
-                  Open microsite
-                </Link>
+      {prospects.length > 0 ? (
+        <section className="demoProgress">
+          <div className="demoStats">
+            <div className="metricGrid metricGridFour compactMetrics">
+              <article className="metricCard">
+                <span>Completed</span>
+                <strong>{completedCount} / {prospects.length}</strong>
               </article>
+              <article className="metricCard">
+                <span>Failed</span>
+                <strong>{failedCount}</strong>
+              </article>
+              <article className="metricCard">
+                <span>Total cost</span>
+                <strong>${totalCost.toFixed(4)}</strong>
+              </article>
+              <article className="metricCard">
+                <span>Total time</span>
+                <strong>{(totalDuration / 1000).toFixed(1)}s</strong>
+              </article>
+            </div>
+          </div>
+
+          <div className="demoProspectList">
+            {prospects.map((p) => (
+              <button
+                key={p.name}
+                className={`demoProspectCard ${p.name === selectedProspect ? "active" : ""} ${p.status}`}
+                type="button"
+                onClick={() => p.run ? setSelectedProspect(p.name) : undefined}
+                disabled={!p.run}
+              >
+                <div className="demoProspectTop">
+                  <strong>{sourceCompany} x {p.name}</strong>
+                  <span className={`statusChip ${p.status === "completed" ? "statusReady" : p.status === "failed" ? "statusError" : p.status === "running" ? "statusPending" : ""}`}>
+                    {p.status === "running" ? (STEP_LABELS[p.currentStep] || "Running...") : p.status}
+                  </span>
+                </div>
+
+                {p.status === "running" ? (
+                  <div className="demoProspectProgress">
+                    <div className="sandboxSpinner demoSpinner" />
+                    <span>{STEP_LABELS[p.currentStep] || "Processing..."}</span>
+                  </div>
+                ) : null}
+
+                {p.run ? (
+                  <div className="demoProspectMeta">
+                    <span>{(p.run.total_duration_ms / 1000).toFixed(1)}s</span>
+                    <span>${p.run.total_cost_usd.toFixed(4)}</span>
+                    <span>{p.run.steps.length} agents</span>
+                    {p.slug ? <span className="demoSlug">/m/{p.slug}</span> : null}
+                  </div>
+                ) : null}
+              </button>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      ) : null}
+
+      {error ? <p className="errorText">{error}</p> : null}
+
+      {selected?.run?.final_html ? (
+        <section className="demoPreview">
+          <div className="previewHeader">
+            <div>
+              <p className="kicker">{sourceCompany} x {selected.name}</p>
+              <h2 className="sectionTitle">Generated microsite</h2>
+            </div>
+            <div className="navCluster">
+              {selected.slug ? (
+                <a className="buttonPrimary" href={`${apiBaseUrl}/m/${selected.slug}`} target="_blank" rel="noopener noreferrer">
+                  Open live URL
+                </a>
+              ) : null}
+              <button className="buttonTertiary" type="button" onClick={() => {
+                const blob = new Blob([selected.run!.final_html], { type: "text/html" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${sourceCompany.toLowerCase()}-x-${selected.name.toLowerCase()}.html`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}>
+                Download HTML
+              </button>
+            </div>
+          </div>
+
+          <div className="frameShell demoFrame">
+            <div className="frameBar">
+              <div className="browserDots"><span /><span /><span /></div>
+              <div className="frameAddress">/m/{selected.slug}</div>
+              <div className="frameRoute">{selected.run.status}</div>
+            </div>
+            <iframe
+              ref={iframeRef}
+              className="sandboxIframe"
+              srcDoc={selected.run.final_html}
+              sandbox="allow-scripts allow-same-origin"
+              title={`${sourceCompany} x ${selected.name}`}
+            />
+          </div>
+
+          <div className="demoTrace">
+            <p className="kicker">Agent trace</p>
+            <div className="demoTraceGrid">
+              {selected.run.steps.map((step, i) => (
+                <div className="demoTraceStep" key={`${step.step_name}-${i}`}>
+                  <div className="demoTraceStepTop">
+                    <strong>{STEP_LABELS[step.step_name] ?? step.step_name}</strong>
+                    <span className="stepAgentBadge">{AGENT_LABELS[step.agent_role] ?? step.agent_role}</span>
+                  </div>
+                  <div className="demoTraceStepMeta">
+                    <span>{step.duration_ms.toFixed(0)}ms</span>
+                    {step.cost_usd !== null ? <span>${step.cost_usd.toFixed(4)}</span> : null}
+                    <span>{step.status}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }

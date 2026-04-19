@@ -27,7 +27,24 @@ from langsmith import Client as LangSmithClient, configure as configure_langsmit
 
 
 BASE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = BASE_DIR.parent
+
+
+def discover_project_root() -> Path:
+    candidates = [
+        BASE_DIR,
+        BASE_DIR.parent,
+        Path.cwd(),
+        Path.cwd().parent,
+    ]
+
+    for candidate in candidates:
+        if (candidate / "company-profiles").exists():
+            return candidate
+
+    return BASE_DIR.parent
+
+
+PROJECT_ROOT = discover_project_root()
 DATA_DIR = BASE_DIR / "data"
 MICROSITES_PATH = DATA_DIR / "microsites.json"
 RUNS_PATH = DATA_DIR / "generation_runs.json"
@@ -299,6 +316,40 @@ COMPANY_PROFILE_CONFIG = {
 }
 
 
+EMBEDDED_MARKDOWN = {
+    "company-profiles/enmovil/brand.md": """# Enmovil Brand Notes
+
+- Tone: operational, sharp, confident, high-signal
+- Design language: dark control-room surfaces with crisp borders and focused glow accents
+- Visual priority: execution visibility, orchestration, and real-world field movement
+- Typography direction: bold editorial headlines with compact systems-style UI copy
+- Layout preference: asymmetric panels, status strips, metrics, and narrative sections that feel like a command surface
+""",
+    "company-profiles/enmovil/skills.md": """# Enmovil Skills Context
+
+- Best for logistics, fleet, field operations, and operational intelligence stories
+- Lead with workflow visibility, exception handling, faster coordination, and measurable execution improvement
+- Avoid generic AI hype; keep claims grounded in operations language
+- Preferred microsite mood: executive-ready but still tactical and kinetic
+""",
+    "company-profiles/razorpay/brand.md": """# Razorpay Brand Notes
+
+- Tone: polished, fast, trustworthy, product-forward
+- Design language: clean blue-led product surfaces with strong whitespace and structured hierarchy
+- Visual priority: developer confidence, payments infrastructure, reliability, and scale
+- Typography direction: modern, clear, product-centric, with minimal clutter
+- Layout preference: strong hero, modular sections, refined cards, and product proof moments
+""",
+    "company-profiles/razorpay/skills.md": """# Razorpay Skills Context
+
+- Best for fintech, payments, checkout, and growth infrastructure narratives
+- Lead with trust, speed, conversion lift, and infrastructure clarity
+- Avoid vague innovation claims; stay focused on flows, reliability, and merchant outcomes
+- Preferred microsite mood: premium product narrative with clean interface precision
+""",
+}
+
+
 PALETTES = [
     {
         "background": "#f7f2ea",
@@ -335,14 +386,36 @@ PALETTES = [
 ]
 
 
+def parse_csv_env(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def get_cors_allow_origins() -> list[str]:
+    configured = parse_csv_env(os.getenv("CORS_ALLOW_ORIGINS", ""))
+    frontend_url = os.getenv("FRONTEND_URL", "").strip()
+    origins = {
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        *configured,
+    }
+    if frontend_url:
+        origins.add(frontend_url)
+    return sorted(origins)
+
+
+def get_cors_allow_origin_regex() -> str | None:
+    configured = os.getenv("CORS_ALLOW_ORIGIN_REGEX", "").strip()
+    if configured:
+        return configured
+    return r"https://.*\.vercel\.app"
+
+
 app = FastAPI(title="website-creator-api")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=get_cors_allow_origins(),
+    allow_origin_regex=get_cors_allow_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -387,6 +460,10 @@ def get_database_url() -> str:
     return database_url
 
 
+def is_database_enabled() -> bool:
+    return bool(os.getenv("DATABASE_URL", "").strip())
+
+
 def get_db_connection() -> psycopg.Connection:
     return psycopg.connect(get_database_url(), autocommit=True)
 
@@ -404,6 +481,10 @@ def normalize_payload(value: Any) -> dict[str, Any]:
 
 
 def ensure_database_tables() -> None:
+    if not is_database_enabled():
+        logger.warning("DATABASE_URL is not configured; using JSON file persistence")
+        return
+
     with get_db_connection() as connection, connection.cursor() as cursor:
         cursor.execute(
             """
@@ -456,6 +537,9 @@ def ensure_database_tables() -> None:
 
 
 def table_has_rows(table_name: str) -> bool:
+    if not is_database_enabled():
+        return False
+
     with get_db_connection() as connection, connection.cursor() as cursor:
         cursor.execute(f"SELECT EXISTS (SELECT 1 FROM {table_name} LIMIT 1)")
         row = cursor.fetchone()
@@ -463,6 +547,9 @@ def table_has_rows(table_name: str) -> bool:
 
 
 def trim_table(table_name: str, order_column: str, limit: int) -> None:
+    if not is_database_enabled():
+        return
+
     with get_db_connection() as connection, connection.cursor() as cursor:
         cursor.execute(
             f"""
@@ -495,6 +582,10 @@ def save_json_list(path: Path, values: list[dict[str, Any]]) -> None:
 
 
 def load_microsites() -> list[MicrositeRecord]:
+    if not is_database_enabled():
+        items = load_json_list(MICROSITES_PATH)
+        return [MicrositeRecord.model_validate(item) for item in items]
+
     with get_db_connection() as connection, connection.cursor() as cursor:
         cursor.execute("SELECT payload FROM microsites ORDER BY generated_at DESC")
         rows = cursor.fetchall()
@@ -502,6 +593,10 @@ def load_microsites() -> list[MicrositeRecord]:
 
 
 def save_microsites(records: list[MicrositeRecord]) -> None:
+    if not is_database_enabled():
+        save_json_list(MICROSITES_PATH, [record.model_dump() for record in records])
+        return
+
     with get_db_connection() as connection, connection.cursor() as cursor:
         for record in records:
             cursor.execute(
@@ -525,6 +620,10 @@ def save_microsites(records: list[MicrositeRecord]) -> None:
 
 
 def load_runs() -> list[GenerationRunRecord]:
+    if not is_database_enabled():
+        items = load_json_list(RUNS_PATH)
+        return [GenerationRunRecord.model_validate(item) for item in items]
+
     with get_db_connection() as connection, connection.cursor() as cursor:
         cursor.execute("SELECT payload FROM generation_runs ORDER BY started_at DESC")
         rows = cursor.fetchall()
@@ -532,6 +631,10 @@ def load_runs() -> list[GenerationRunRecord]:
 
 
 def save_runs(records: list[GenerationRunRecord]) -> None:
+    if not is_database_enabled():
+        save_json_list(RUNS_PATH, [record.model_dump() for record in records[:250]])
+        return
+
     with get_db_connection() as connection, connection.cursor() as cursor:
         for record in records:
             cursor.execute(
@@ -558,6 +661,10 @@ def save_runs(records: list[GenerationRunRecord]) -> None:
 
 
 def load_request_events() -> list[ApiRequestEvent]:
+    if not is_database_enabled():
+        items = load_json_list(REQUESTS_PATH)
+        return [ApiRequestEvent.model_validate(item) for item in items]
+
     with get_db_connection() as connection, connection.cursor() as cursor:
         cursor.execute("SELECT payload FROM api_request_events ORDER BY occurred_at DESC")
         rows = cursor.fetchall()
@@ -565,6 +672,10 @@ def load_request_events() -> list[ApiRequestEvent]:
 
 
 def load_prompts() -> list[PromptLibraryItem]:
+    if not is_database_enabled():
+        items = load_json_list(PROMPTS_PATH)
+        return [PromptLibraryItem.model_validate(item) for item in items]
+
     with get_db_connection() as connection, connection.cursor() as cursor:
         cursor.execute("SELECT payload FROM prompt_library ORDER BY updated_at DESC")
         rows = cursor.fetchall()
@@ -572,6 +683,10 @@ def load_prompts() -> list[PromptLibraryItem]:
 
 
 def save_prompts(records: list[PromptLibraryItem]) -> None:
+    if not is_database_enabled():
+        save_json_list(PROMPTS_PATH, [record.model_dump() for record in records])
+        return
+
     with get_db_connection() as connection, connection.cursor() as cursor:
         for record in records:
             cursor.execute(
@@ -599,6 +714,10 @@ def save_prompts(records: list[PromptLibraryItem]) -> None:
 
 
 def save_request_events(records: list[ApiRequestEvent]) -> None:
+    if not is_database_enabled():
+        save_json_list(REQUESTS_PATH, [record.model_dump() for record in records[:250]])
+        return
+
     with get_db_connection() as connection, connection.cursor() as cursor:
         for record in records:
             cursor.execute(
@@ -625,6 +744,10 @@ def save_request_events(records: list[ApiRequestEvent]) -> None:
 
 
 def append_request_event(event: ApiRequestEvent) -> None:
+    if not is_database_enabled():
+        save_request_events([event, *load_request_events()][:250])
+        return
+
     save_request_events([event])
 
 
@@ -652,6 +775,9 @@ def ensure_default_prompts() -> None:
 
 
 def migrate_json_file_to_database() -> None:
+    if not is_database_enabled():
+        return
+
     if not table_has_rows("prompt_library"):
         prompt_items = [PromptLibraryItem.model_validate(item) for item in load_json_list(PROMPTS_PATH)]
         if prompt_items:
@@ -674,8 +800,23 @@ def migrate_json_file_to_database() -> None:
 
 
 def read_project_markdown(relative_path: str) -> str:
-    path = PROJECT_ROOT / relative_path
-    return path.read_text(encoding="utf-8")
+    candidate_paths = [
+        PROJECT_ROOT / relative_path,
+        BASE_DIR / relative_path,
+        BASE_DIR.parent / relative_path,
+        Path.cwd() / relative_path,
+    ]
+
+    for path in candidate_paths:
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+
+    embedded = EMBEDDED_MARKDOWN.get(relative_path)
+    if embedded is not None:
+        logger.warning("Using embedded markdown fallback for %s", relative_path)
+        return embedded
+
+    raise FileNotFoundError(f"Project markdown file not found for {relative_path}")
 
 
 def list_company_profiles() -> list[CompanyProfileRecord]:
@@ -1365,7 +1506,7 @@ def health() -> dict[str, Any]:
 
     return {
         "status": "ok",
-        "persistence": "postgres",
+        "persistence": "postgres" if is_database_enabled() else "json",
         "microsites": len(load_microsites()),
         "runs": len(load_runs()),
         "prompts": len(load_prompts()),
@@ -1741,6 +1882,10 @@ class SingleStageRequest(BaseModel):
 
 @app.on_event("startup")
 def ensure_postgres_schema() -> None:
+    if not is_database_enabled():
+        logger.info("DATABASE_URL is not configured; skipping Postgres council schema bootstrap")
+        return
+
     try:
         pgdb.ensure_schema()
         logger.info("Postgres schema ready")
