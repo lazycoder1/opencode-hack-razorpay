@@ -636,13 +636,20 @@ def save_microsites(records: list[MicrositeRecord]) -> None:
         for record in records:
             cursor.execute(
                 """
-                INSERT INTO microsites (id, slug, company_name, generated_at, payload)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO microsites (id, slug, company_name, generated_at, payload,
+                    source_company, headline, tagline, summary, council_run_id, tenant_key)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO UPDATE SET
                     slug = EXCLUDED.slug,
                     company_name = EXCLUDED.company_name,
                     generated_at = EXCLUDED.generated_at,
-                    payload = EXCLUDED.payload
+                    payload = EXCLUDED.payload,
+                    source_company = EXCLUDED.source_company,
+                    headline = EXCLUDED.headline,
+                    tagline = EXCLUDED.tagline,
+                    summary = EXCLUDED.summary,
+                    council_run_id = EXCLUDED.council_run_id,
+                    tenant_key = EXCLUDED.tenant_key
                 """,
                 (
                     record.id,
@@ -650,6 +657,12 @@ def save_microsites(records: list[MicrositeRecord]) -> None:
                     record.company_name,
                     parse_iso_datetime(record.generated_at),
                     Jsonb(record.model_dump()),
+                    record.source_company_name,
+                    record.headline,
+                    record.tagline,
+                    record.summary,
+                    record.generation_run_id,
+                    _slugify(record.source_company_name),
                 ),
             )
 

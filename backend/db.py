@@ -174,13 +174,26 @@ MIGRATIONS_SQL = [
         updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
     )""",
     "CREATE INDEX IF NOT EXISTS idx_council_prompt_tenant_stage ON council_prompt_library(tenant_key, stage, updated_at DESC)",
-    # --- backfill html from council_runs for rows that were saved without it ---
+    # --- backfill html + council_run_id from council_runs via payload generation_run_id ---
     """UPDATE microsites m
-       SET html = cr.final_html
+       SET html = cr.final_html,
+           council_run_id = cr.run_id
        FROM council_runs cr
-       WHERE m.council_run_id = cr.run_id
+       WHERE (m.payload->>'generation_run_id') = cr.run_id
          AND (m.html IS NULL OR m.html = '')
          AND cr.final_html <> ''""",
+    # --- backfill individual columns from payload JSONB for rows saved only via save_microsites() ---
+    """UPDATE microsites
+       SET source_company = COALESCE(NULLIF(source_company, ''), payload->>'source_company_name', ''),
+           headline       = COALESCE(NULLIF(headline, ''),       payload->>'headline', ''),
+           tagline        = COALESCE(NULLIF(tagline, ''),        payload->>'tagline', ''),
+           summary        = COALESCE(NULLIF(summary, ''),        payload->>'summary', ''),
+           council_run_id = COALESCE(council_run_id,             payload->>'generation_run_id'),
+           tenant_key     = COALESCE(NULLIF(tenant_key, ''),
+                              regexp_replace(lower(COALESCE(payload->>'source_company_name', '')), '[^a-z0-9]+', '-', 'g'),
+                              '')
+       WHERE (source_company = '' OR headline = '' OR council_run_id IS NULL)
+         AND payload IS NOT NULL AND payload::text <> '{}'""",
 ]
 
 
