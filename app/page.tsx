@@ -122,6 +122,9 @@ export default function Home() {
           <Link className="navLink" href="/observability">
             View runs
           </Link>
+          <Link className="navLink" href="/signup">
+            Signup
+          </Link>
         </div>
       </nav>
 

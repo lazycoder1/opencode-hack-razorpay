@@ -1473,6 +1473,214 @@ button {
   color: var(--text);
 }
 
+/* ---------- Signup / checkout ---------- */
+
+.signupGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.paymentPanel {
+  display: grid;
+  gap: 20px;
+}
+
+.orderSummary {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.orderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--muted-strong);
+}
+
+.orderRow strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.orderDivider {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 0;
+}
+
+.orderTotal {
+  font-size: 1.05rem;
+}
+
+.orderTotal strong {
+  font-size: 1.35rem;
+  background: linear-gradient(135deg, #9386ff, #68d5ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.qrFrame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: #ffffff;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.qrImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.qrFallback {
+  display: none;
+  place-items: center;
+  gap: 8px;
+  text-align: center;
+  color: #0d1015;
+  padding: 20px;
+}
+
+.qrFallback strong {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.qrFallback span {
+  font-size: 0.82rem;
+  color: #41485a;
+  line-height: 1.5;
+}
+
+.qrFallback code {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: #0d1015;
+}
+
+.upiBadge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.upiId {
+  display: block;
+  margin-top: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.payeeList {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.payeeRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  color: var(--muted-strong);
+}
+
+.payeeRow dt {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.payeeRow dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+
+.payeeHighlight dd {
+  color: var(--success);
+  font-size: 1.05rem;
+}
+
+.contactCard {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(139, 125, 255, 0.12), rgba(93, 220, 255, 0.06));
+  display: grid;
+  gap: 6px;
+}
+
+.contactCard strong {
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.contactPhoneRow {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted-strong);
+}
+
+.contactSep {
+  color: var(--muted);
+}
+
+.noticePanel {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid rgba(121, 213, 159, 0.32);
+  border-radius: var(--radius-md);
+  background: rgba(121, 213, 159, 0.06);
+}
+
+.noticePanel p {
+  margin: 0;
+  color: var(--muted-strong);
+  line-height: 1.55;
+}
+
 @media (max-width: 1120px) {
   .appShell {
     grid-template-columns: 1fr;
@@ -1497,6 +1705,7 @@ button {
   .libraryGrid,
   .opsGrid,
   .promptLibraryGrid,
+  .signupGrid,
   .splitDetailGrid,
   .artifactHero,
   .mockGrid {
