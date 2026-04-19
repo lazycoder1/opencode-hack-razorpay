@@ -81,6 +81,10 @@ export default function ObservabilityPage() {
   const [selectedRunId, setSelectedRunId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "failed">("all");
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
 
   useEffect(() => {
     async function loadObservability() {
@@ -180,6 +184,21 @@ export default function ObservabilityPage() {
     [runs, selectedRunId],
   );
 
+  const filteredRuns = useMemo(() => {
+    return runs.filter((run) => {
+      const matchesSearch = !searchQuery || run.company_name.toLowerCase().includes(searchQuery.toLowerCase()) || run.id.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === "all" || (statusFilter === "completed" ? run.status === "completed" : run.status !== "completed");
+      return matchesSearch && matchesStatus;
+    });
+  }, [runs, searchQuery, statusFilter]);
+
+  const compareRuns = useMemo(
+    () => compareIds.map((id) => runs.find((r) => r.id === id)).filter(Boolean) as GenerationRun[],
+    [runs, compareIds],
+  );
+
+  const regressionRuns = useMemo(() => runs.filter((r) => r.status !== "completed" || r.error), [runs]);
+
   const completedRuns = runs.filter((run) => run.status === "completed").length;
   const failedRuns = runs.filter((run) => run.status !== "completed").length;
   const averageLatency =
@@ -237,6 +256,13 @@ export default function ObservabilityPage() {
         </div>
       </section>
 
+      {regressionRuns.length > 0 && !loading ? (
+        <div className="alertBanner alertError">
+          <strong>Regression Alert</strong>
+          <span>{regressionRuns.length} run{regressionRuns.length !== 1 ? "s" : ""} failed or errored — quality may have degraded. Investigate below.</span>
+        </div>
+      ) : null}
+
       {error ? <p className="errorText">{error}</p> : null}
 
       {loading ? (
@@ -256,23 +282,41 @@ export default function ObservabilityPage() {
               <p className="kicker">Runs</p>
               <h2 className="sectionTitle">Generation history</h2>
             </div>
+            <button className={`buttonSecondary ${compareMode ? "activeToggle" : ""}`} type="button" onClick={() => { setCompareMode(!compareMode); setCompareIds([]); }}>
+              {compareMode ? "Exit diff" : "Run diff"}
+            </button>
           </div>
+          <div className="searchFilterBar">
+            <input className="searchInput" type="text" placeholder="Search runs..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <select className="filterSelect" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "all" | "completed" | "failed")}>
+              <option value="all">All status</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+          {compareMode ? <p className="compareHint">Select two runs to compare</p> : null}
 
           {loading ? (
             <div className="emptyPanel">
               <p>Loading run history...</p>
             </div>
-          ) : runs.length === 0 ? (
+          ) : filteredRuns.length === 0 ? (
             <div className="emptyPanel">
-              <p>No runs captured yet.</p>
+              <p>{runs.length === 0 ? "No runs captured yet." : "No runs match your filters."}</p>
             </div>
           ) : (
             <div className="selectorList">
-              {runs.map((run) => (
+              {filteredRuns.map((run) => (
                 <button
                   key={run.id}
-                  className={`selectorButton ${run.id === selectedRun?.id ? "active" : ""}`}
-                  onClick={() => setSelectedRunId(run.id)}
+                  className={`selectorButton ${compareMode ? (compareIds.includes(run.id) ? "active" : "") : (run.id === selectedRun?.id ? "active" : "")}`}
+                  onClick={() => {
+                    if (compareMode) {
+                      setCompareIds((prev) => prev.includes(run.id) ? prev.filter((x) => x !== run.id) : prev.length < 2 ? [...prev, run.id] : [prev[1], run.id]);
+                    } else {
+                      setSelectedRunId(run.id);
+                    }
+                  }}
                   type="button"
                 >
                   <div className="selectorTop">
@@ -281,13 +325,62 @@ export default function ObservabilityPage() {
                   </div>
                   <strong className="selectorTitle">{run.company_name}</strong>
                   <p>{new Date(run.started_at).toLocaleString()}</p>
+                  {compareMode && compareIds.includes(run.id) ? <span className="compareBadge">#{compareIds.indexOf(run.id) + 1}</span> : null}
                 </button>
               ))}
             </div>
           )}
         </aside>
 
-        {loading ? (
+        {compareMode && compareRuns.length === 2 ? (
+          <section className="detailStack">
+            <article className="panel detailPanel">
+              <div className="previewHeader">
+                <div>
+                  <p className="kicker">Run diff</p>
+                  <h2 className="sectionTitle">Comparing two runs</h2>
+                </div>
+              </div>
+              <div className="diffGrid">
+                {compareRuns.map((run, i) => (
+                  <div className="diffColumn" key={run.id}>
+                    <p className="kicker">Run #{i + 1}</p>
+                    <strong className="selectorTitle">{run.company_name}</strong>
+                    <span className={`statusChip ${run.status === "completed" ? "statusReady" : "statusError"}`}>{run.status}</span>
+                    <div className="metricGrid compactMetrics" style={{ marginTop: 8 }}>
+                      <article className="metricCard"><span>Duration</span><strong>{run.total_duration_ms?.toFixed(0) ?? "-"} ms</strong></article>
+                      <article className="metricCard"><span>Tokens</span><strong>{run.total_tokens ?? "-"}</strong></article>
+                      <article className="metricCard"><span>Model</span><strong>{run.model_name ?? "-"}</strong></article>
+                    </div>
+                    <div className="stepList" style={{ marginTop: 8 }}>
+                      {run.steps.map((step) => (
+                        <article className="stepItem" key={`${step.name}-${step.started_at}`}>
+                          <div className="stepHead"><strong>{step.name}</strong><span>{step.duration_ms.toFixed(0)} ms</span></div>
+                          <p className="stepStatus">{step.status}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {(() => {
+                const [a, b] = compareRuns;
+                const dDur = (a.total_duration_ms ?? 0) - (b.total_duration_ms ?? 0);
+                const dTok = (a.total_tokens ?? 0) - (b.total_tokens ?? 0);
+                return (
+                  <div className="diffSummary">
+                    <p className="kicker">Delta (Run #1 vs #2)</p>
+                    <div className="metricGrid metricGridThree compactMetrics">
+                      <article className="metricCard"><span>Duration</span><strong className={dDur > 0 ? "evalRegression" : ""}>{dDur > 0 ? "+" : ""}{dDur.toFixed(0)} ms</strong></article>
+                      <article className="metricCard"><span>Tokens</span><strong className={dTok > 0 ? "evalRegression" : ""}>{dTok > 0 ? "+" : ""}{dTok}</strong></article>
+                      <article className="metricCard"><span>Status match</span><strong>{a.status === b.status ? "Same" : "Different"}</strong></article>
+                    </div>
+                  </div>
+                );
+              })()}
+            </article>
+          </section>
+        ) : loading ? (
           <div className="emptyPanel">
             <p>Loading run detail...</p>
           </div>

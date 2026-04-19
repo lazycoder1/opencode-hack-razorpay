@@ -418,6 +418,10 @@ DEFAULT_PROMPTS: dict[str, dict[str, str]] = {
         "user": (
             "Create a sales microsite for {{source_company}} selling to {{company_name}}.\n\n"
             "Include a hero with the 5-line narrative hook verbatim, 3 stats, 3-4 editorial sections, role-specific discovery sections for CIO/CFO/Champion, a CTA, and a footer.\n"
+            "IMPORTANT: Role-specific discovery sections MUST use in-page anchor links. "
+            "Add a role navigation bar with links to #cio-discovery, #cfo-discovery, #champion-discovery. "
+            "Each role section MUST have the matching id attribute (id=\"cio-discovery\", id=\"cfo-discovery\", id=\"champion-discovery\"). "
+            "Do NOT link role pages to external URLs or the base URL — they are sections within THIS page.\n"
             "Make it feel premium and brand-appropriate (see seller brand context).\n\n"
             "--- SELLER BRAND ---\n{{seller_brand}}\n\n"
             "--- SELLER SKILLS ---\n{{seller_skills}}\n\n"
@@ -1562,6 +1566,7 @@ def run_council(
         prospect_seller_fit=final_state.get("prospect_seller_fit"),
         narrative_brief=final_state.get("narrative_brief"),
         microsite_content=content,
+        role_pages=final_state.get("role_pages"),
         iterations=(final_state.get("iteration_count", 0) or 0) + 1,
         used_mcp=bool(final_state.get("used_mcp")),
     )

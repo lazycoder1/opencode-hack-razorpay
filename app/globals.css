@@ -2252,3 +2252,143 @@ button {
     font-size: clamp(2rem, 12vw, 3.4rem);
   }
 }
+
+/* --- Observability L5: search, filter, diff, alerts --- */
+
+.searchFilterBar {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.searchInput {
+  flex: 1;
+  padding: 7px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  font-size: 0.8rem;
+  font-family: var(--font-ui);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.searchInput:focus {
+  border-color: var(--accent);
+}
+
+.filterSelect {
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  font-size: 0.8rem;
+  font-family: var(--font-ui);
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+}
+
+.compareHint {
+  padding: 0 16px 8px;
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.compareBadge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.activeToggle {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-color: var(--accent) !important;
+}
+
+.alertBanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  margin-bottom: 12px;
+}
+
+.alertError {
+  background: rgba(242, 139, 155, 0.14);
+  border: 1px solid rgba(242, 139, 155, 0.3);
+  color: #9c2a3a;
+}
+
+.alertError strong {
+  white-space: nowrap;
+}
+
+.diffGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 4px 0 12px;
+}
+
+.diffColumn {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel-soft);
+}
+
+.diffSummary {
+  padding: 14px 0 0;
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+}
+
+/* --- Eval L5: diagnosis panel --- */
+
+.diagnosisPanel {
+  margin-bottom: 16px;
+}
+
+.diagnosisList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.diagnosisCard {
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel-soft);
+}
+
+.diagnosisHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.diagnosisCause {
+  font-size: 0.82rem;
+  color: var(--muted-strong);
+  margin: 2px 0;
+}
+
+.diagnosisFix {
+  font-size: 0.82rem;
+  color: var(--text);
+  margin: 2px 0;
+}

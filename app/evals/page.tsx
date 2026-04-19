@@ -39,6 +39,11 @@ export default function EvalsPage() {
   const [running, setRunning] = useState(false);
   const [runningCase, setRunningCase] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [diagnosis, setDiagnosis] = useState<{ check_name: string; likely_cause: string; fix: string }[] | null>(null);
+  const [promptPatch, setPromptPatch] = useState<string | null>(null);
+  const [applyingFix, setApplyingFix] = useState(false);
+  const [fixApplied, setFixApplied] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -87,6 +92,55 @@ export default function EvalsPage() {
       setError(err instanceof Error ? err.message : "Eval suite failed");
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function diagnoseFailures() {
+    const failedChecks = results
+      .flatMap((r) => r.checks.filter((c) => !c.passed).map((c) => c.name))
+      .filter((v, i, a) => a.indexOf(v) === i);
+    if (failedChecks.length === 0) { setError("No failures to diagnose"); return; }
+    const sample = results.find((r) => r.failed > 0);
+    setDiagnosing(true);
+    setDiagnosis(null);
+    setPromptPatch(null);
+    setFixApplied(false);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/evals/diagnose`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          failed_checks: failedChecks,
+          prospect: sample?.prospect ?? "",
+          source_company: sample?.source_company ?? "",
+        }),
+      });
+      if (!response.ok) throw new Error(`Diagnosis failed: ${response.status}`);
+      const data = await response.json();
+      setDiagnosis(data.suggestions?.diagnosis ?? []);
+      setPromptPatch(data.suggestions?.prompt_patch ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Diagnosis failed");
+    } finally {
+      setDiagnosing(false);
+    }
+  }
+
+  async function applyPromptFix() {
+    if (!promptPatch) return;
+    setApplyingFix(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/evals/apply-fix`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt_patch: promptPatch }),
+      });
+      if (!response.ok) throw new Error(`Apply fix failed: ${response.status}`);
+      setFixApplied(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Apply fix failed");
+    } finally {
+      setApplyingFix(false);
     }
   }
 
@@ -147,6 +201,43 @@ export default function EvalsPage() {
 
       {error ? <p className="errorText">{error}</p> : null}
 
+      {diagnosis ? (
+        <section className="panel diagnosisPanel">
+          <div className="panelHeader compactHeader">
+            <div>
+              <p className="kicker">Closed-loop auto-remediation</p>
+              <h2 className="sectionTitle">AI diagnosis of {diagnosis.length} failure{diagnosis.length !== 1 ? "s" : ""}</h2>
+            </div>
+            <div className="evalCaseActions">
+              {promptPatch ? (
+                <button className="buttonPrimary" type="button" disabled={applyingFix || fixApplied} onClick={applyPromptFix}>
+                  {fixApplied ? "Fix applied — re-run evals" : applyingFix ? "Applying..." : "Apply prompt fix"}
+                </button>
+              ) : null}
+              <button className="buttonSecondary" type="button" onClick={() => { setDiagnosis(null); setPromptPatch(null); }}>Dismiss</button>
+            </div>
+          </div>
+          <div className="diagnosisList">
+            {diagnosis.map((d, i) => (
+              <div className="diagnosisCard" key={i}>
+                <div className="diagnosisHeader">
+                  <span className="evalCheckDot evalFail" />
+                  <strong>{d.check_name}</strong>
+                </div>
+                <p className="diagnosisCause"><strong>Likely cause:</strong> {d.likely_cause}</p>
+                <p className="diagnosisFix"><strong>Fix:</strong> {d.fix}</p>
+              </div>
+            ))}
+          </div>
+          {promptPatch ? (
+            <div className="promptPanel">
+              <p className="miniLabel">Suggested prompt patch</p>
+              <pre className="stepMeta">{promptPatch}</pre>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       <section className="evalGrid">
         <article className="panel evalCasesPanel">
           <div className="panelHeader compactHeader">
@@ -154,14 +245,14 @@ export default function EvalsPage() {
               <p className="kicker">Named eval set</p>
               <h2 className="sectionTitle">5 test cases</h2>
             </div>
-            <button
-              className="buttonPrimary"
-              type="button"
-              disabled={running || runningCase !== null}
-              onClick={runAllCases}
-            >
-              {running ? "Running all..." : "Run all evals"}
-            </button>
+            <div className="evalCaseActions">
+              <button className="buttonSecondary" type="button" disabled={diagnosing || totalFailed === 0} onClick={diagnoseFailures}>
+                {diagnosing ? "Diagnosing..." : "Diagnose failures"}
+              </button>
+              <button className="buttonPrimary" type="button" disabled={running || runningCase !== null} onClick={runAllCases}>
+                {running ? "Running all..." : "Run all evals"}
+              </button>
+            </div>
           </div>
 
           <div className="evalCaseList">

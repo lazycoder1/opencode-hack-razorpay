@@ -138,6 +138,9 @@ MIGRATIONS_SQL = [
     # columns from main.py schema that may be missing when db.py schema won the race
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS payload JSONB NOT NULL DEFAULT '{}'",
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS generated_at TIMESTAMPTZ DEFAULT now()",
+    # ensure defaults exist on columns created by main.py without defaults
+    "ALTER TABLE microsites ALTER COLUMN generated_at SET DEFAULT now()",
+    "ALTER TABLE microsites ALTER COLUMN payload SET DEFAULT '{}'::jsonb",
     # --- indexes ---
     "CREATE INDEX IF NOT EXISTS idx_council_runs_tenant_created ON council_runs(tenant_key, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_microsites_tenant_created ON microsites(tenant_key, created_at DESC)",

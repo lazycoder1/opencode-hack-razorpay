@@ -2373,6 +2373,98 @@ def list_eval_results_endpoint() -> list[dict[str, Any]]:
         return []
 
 
+class DiagnoseRequest(BaseModel):
+    failed_checks: list[str] = Field(default_factory=list)
+    prospect: str = ""
+    source_company: str = ""
+
+
+class ApplyFixRequest(BaseModel):
+    prompt_patch: str
+
+
+@app.post("/api/evals/diagnose")
+def diagnose_eval_failures(request: DiagnoseRequest) -> dict[str, Any]:
+    """Closed-loop auto-remediation: analyze failed eval checks and suggest prompt fixes."""
+    if not request.failed_checks:
+        raise HTTPException(status_code=400, detail="No failed checks provided")
+
+    checks_text = ", ".join(request.failed_checks)
+    diagnosis_prompt = (
+        "You are a prompt engineering assistant for an AI microsite generation system.\n"
+        "The system generates personalized sales microsites using a council of AI agents.\n"
+        "An automated eval pipeline ran and these checks FAILED:\n\n"
+        f"Failed checks: {checks_text}\n"
+        f"Prospect: {request.prospect or 'unknown'}\n"
+        f"Source company: {request.source_company or 'unknown'}\n\n"
+        "Analyze each failure and suggest specific prompt modifications to fix them.\n"
+        "Return valid JSON with this exact structure:\n"
+        '{"diagnosis": [{"check_name": "...", "likely_cause": "...", "fix": "..."}], '
+        '"prompt_patch": "Text to append to the current system prompt to fix all failures"}'
+    )
+
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
+        llm = ChatOpenAI(model=get_openai_model_name(), api_key=api_key, temperature=0.3)
+        result = llm.invoke([{"role": "user", "content": diagnosis_prompt}])
+        raw = stringify_message_content(result.content)
+        # Strip markdown fences if present
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[-1]
+        if cleaned.endswith("```"):
+            cleaned = cleaned.rsplit("```", 1)[0]
+        cleaned = cleaned.strip()
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            parsed = {"diagnosis": [{"check_name": "all", "likely_cause": "Analysis unavailable", "fix": cleaned}], "prompt_patch": cleaned}
+        return {"status": "ok", "suggestions": parsed}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Eval diagnosis failed")
+        return {"status": "error", "message": str(exc), "suggestions": {"diagnosis": [], "prompt_patch": ""}}
+
+
+@app.post("/api/evals/apply-fix")
+def apply_eval_fix(request: ApplyFixRequest) -> dict[str, Any]:
+    """Apply a prompt fix by creating a new prompt variant in the council prompt library."""
+    if not request.prompt_patch.strip():
+        raise HTTPException(status_code=400, detail="Empty prompt patch")
+
+    # Get current active prompt for generate_microsite stage
+    try:
+        current_prompts = pgdb.list_council_prompts("")
+        gen_prompt = next((p for p in current_prompts if p.get("stage") == "generate_microsite" and p.get("is_active")), None)
+    except Exception:
+        gen_prompt = None
+
+    current_system = gen_prompt.get("system_prompt", "") if gen_prompt else ""
+    new_system = f"{current_system}\n\n# Auto-remediation patch (from eval diagnosis)\n{request.prompt_patch.strip()}"
+    tenant = gen_prompt.get("tenant_key", "") if gen_prompt else ""
+
+    new_record = {
+        "id": uuid4().hex,
+        "tenant_key": tenant,
+        "stage": "generate_microsite",
+        "name": f"Auto-fix {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
+        "system_prompt": new_system,
+        "user_prompt": gen_prompt.get("user_prompt", "") if gen_prompt else "",
+        "is_active": False,
+        "metadata": {"source": "eval_auto_remediation", "patch": request.prompt_patch.strip()},
+    }
+    try:
+        pgdb.save_council_prompt(new_record)
+        pgdb.activate_council_prompt(tenant, new_record["id"])
+        return {"status": "ok", "prompt_id": new_record["id"], "name": new_record["name"]}
+    except Exception as exc:
+        logger.exception("Failed to apply eval fix")
+        return {"status": "error", "message": str(exc)}
+
+
 @app.get("/api/observability/requests", response_model=list[ApiRequestEvent])
 def list_api_requests(limit: int = 50) -> list[ApiRequestEvent]:
     return load_request_events()[:limit]
