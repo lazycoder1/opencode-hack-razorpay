@@ -1669,6 +1669,116 @@ button {
   }
 }
 
+/* ---- Eval page ---- */
+
+.evalGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.evalCaseList,
+.evalResultList {
+  display: grid;
+  gap: 10px;
+}
+
+.evalSection {
+  margin-bottom: 18px;
+}
+
+.evalCaseCard,
+.evalResultCard {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 10px;
+}
+
+.evalResultRegression {
+  border-color: rgba(255, 142, 148, 0.35);
+  background: rgba(255, 142, 148, 0.04);
+}
+
+.evalCaseTop,
+.evalResultTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.evalCaseActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.evalCaseName {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+
+.evalCheckList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.evalCheckListCompact {
+  gap: 6px;
+}
+
+.evalCheckItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--muted-strong);
+}
+
+.evalCheckDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  flex-shrink: 0;
+}
+
+.evalCheckDot.evalPass {
+  background: var(--success);
+}
+
+.evalCheckDot.evalFail {
+  background: var(--danger);
+}
+
+.evalResultMeta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.evalResultDate {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.evalRegression {
+  color: var(--danger);
+}
+
+@media (max-width: 1120px) {
+  .evalGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .cacheRow {
   display: flex;
   align-items: center;

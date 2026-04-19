@@ -215,6 +215,60 @@ def run_eval_case(case: dict[str, Any], skill: str = DEFAULT_SKILL, prompt_templ
     return eval_record
 
 
+QUALITY_GATE_CHECKS = [
+    {"name": "html_is_valid", "description": "Output starts with <!DOCTYPE html> or <html"},
+    {"name": "contains_prospect_name", "description": "HTML mentions the prospect company"},
+    {"name": "contains_source_name", "description": "HTML mentions the source company"},
+    {"name": "has_cta", "description": "HTML contains a call-to-action button or link"},
+    {"name": "min_length", "description": "HTML is at least 2000 chars (not a stub)"},
+    {"name": "all_steps_completed", "description": "All 5 council steps completed"},
+]
+
+
+def run_quality_gate(council_result: Any) -> dict[str, Any]:
+    """Run quality checks against any council result. Returns gate verdict + check details.
+    This runs automatically after every generation to catch regressions."""
+    check_results: list[dict[str, Any]] = []
+    passed = 0
+    failed = 0
+
+    for check in QUALITY_GATE_CHECKS:
+        result = run_check(check["name"], council_result)
+        check_results.append({
+            "name": check["name"],
+            "description": check["description"],
+            "passed": result,
+        })
+        if result:
+            passed += 1
+        else:
+            failed += 1
+
+    total = passed + failed
+    gate_passed = failed == 0
+
+    record = {
+        "id": uuid4().hex,
+        "eval_name": f"quality_gate_{council_result.prospect.lower().replace(' ', '_')}",
+        "prospect": council_result.prospect,
+        "source_company": council_result.source_company,
+        "status": "passed" if gate_passed else "regression",
+        "checks": check_results,
+        "passed": passed,
+        "failed": failed,
+        "total": total,
+        "council_run_id": council_result.run_id,
+        "duration_ms": 0.0,
+    }
+
+    try:
+        save_eval_result(record)
+    except Exception:
+        logger.exception("Failed to persist quality gate result")
+
+    return record
+
+
 def run_all_evals(skill: str = DEFAULT_SKILL, prompt_template: str = DEFAULT_PROMPT) -> list[dict[str, Any]]:
     """Run all named eval cases and return results."""
     results: list[dict[str, Any]] = []

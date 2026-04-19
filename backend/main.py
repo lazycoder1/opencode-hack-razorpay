@@ -1954,11 +1954,11 @@ def sandbox_generate_compat(request: SandboxStepRequest) -> SandboxStepResult:
 try:  # noqa: E402
     from .council import CouncilRunResult, StagePrompts, AgentStepResult as CouncilStepResult, run_council, run_single_stage, DEFAULT_PROMPTS as COUNCIL_DEFAULT_PROMPTS
     from . import db as pgdb
-    from .evals import EVAL_CASES, run_eval_case, run_all_evals, DEFAULT_SKILL as EVAL_DEFAULT_SKILL, DEFAULT_PROMPT as EVAL_DEFAULT_PROMPT
+    from .evals import EVAL_CASES, run_eval_case, run_all_evals, run_quality_gate, DEFAULT_SKILL as EVAL_DEFAULT_SKILL, DEFAULT_PROMPT as EVAL_DEFAULT_PROMPT
 except ImportError:  # Railway can load this module as top-level `main`
     from council import CouncilRunResult, StagePrompts, AgentStepResult as CouncilStepResult, run_council, run_single_stage, DEFAULT_PROMPTS as COUNCIL_DEFAULT_PROMPTS
     import db as pgdb
-    from evals import EVAL_CASES, run_eval_case, run_all_evals, DEFAULT_SKILL as EVAL_DEFAULT_SKILL, DEFAULT_PROMPT as EVAL_DEFAULT_PROMPT
+    from evals import EVAL_CASES, run_eval_case, run_all_evals, run_quality_gate, DEFAULT_SKILL as EVAL_DEFAULT_SKILL, DEFAULT_PROMPT as EVAL_DEFAULT_PROMPT
 
 from fastapi.responses import HTMLResponse  # noqa: E402
 
@@ -2244,6 +2244,15 @@ def council_run(request: CouncilRunRequest) -> CouncilRunResult:
         save_microsites([record])
     except Exception:
         logger.exception("Failed to persist structured MicrositeRecord (/microsites/{slug})")
+
+    # Automated quality gate: runs checks and persists regression flag
+    try:
+        gate_result = run_quality_gate(result)
+        if gate_result["status"] == "regression":
+            logger.warning("Quality gate REGRESSION for %s x %s: %d/%d checks failed",
+                           result.source_company, result.prospect, gate_result["failed"], gate_result["total"])
+    except Exception:
+        logger.exception("Quality gate failed to run")
 
     return result
 
