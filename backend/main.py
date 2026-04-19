@@ -445,41 +445,137 @@ def save_json_list(path: Path, values: list[dict[str, Any]]) -> None:
 
 
 def load_microsites() -> list[MicrositeRecord]:
-    return [MicrositeRecord.model_validate(item) for item in load_json_list(MICROSITES_PATH)]
+    with get_db_connection() as connection, connection.cursor() as cursor:
+        cursor.execute("SELECT payload FROM microsites ORDER BY generated_at DESC")
+        rows = cursor.fetchall()
+    return [MicrositeRecord.model_validate(normalize_payload(row[0])) for row in rows]
 
 
 def save_microsites(records: list[MicrositeRecord]) -> None:
-    save_json_list(MICROSITES_PATH, [record.model_dump() for record in records])
+    with get_db_connection() as connection, connection.cursor() as cursor:
+        for record in records:
+            cursor.execute(
+                """
+                INSERT INTO microsites (id, slug, company_name, generated_at, payload)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    slug = EXCLUDED.slug,
+                    company_name = EXCLUDED.company_name,
+                    generated_at = EXCLUDED.generated_at,
+                    payload = EXCLUDED.payload
+                """,
+                (
+                    record.id,
+                    record.slug,
+                    record.company_name,
+                    parse_iso_datetime(record.generated_at),
+                    Jsonb(record.model_dump()),
+                ),
+            )
 
 
 def load_runs() -> list[GenerationRunRecord]:
-    return [GenerationRunRecord.model_validate(item) for item in load_json_list(RUNS_PATH)]
+    with get_db_connection() as connection, connection.cursor() as cursor:
+        cursor.execute("SELECT payload FROM generation_runs ORDER BY started_at DESC")
+        rows = cursor.fetchall()
+    return [GenerationRunRecord.model_validate(normalize_payload(row[0])) for row in rows]
 
 
 def save_runs(records: list[GenerationRunRecord]) -> None:
-    save_json_list(RUNS_PATH, [record.model_dump() for record in records])
+    with get_db_connection() as connection, connection.cursor() as cursor:
+        for record in records:
+            cursor.execute(
+                """
+                INSERT INTO generation_runs (id, company_name, status, started_at, microsite_slug, payload)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    company_name = EXCLUDED.company_name,
+                    status = EXCLUDED.status,
+                    started_at = EXCLUDED.started_at,
+                    microsite_slug = EXCLUDED.microsite_slug,
+                    payload = EXCLUDED.payload
+                """,
+                (
+                    record.id,
+                    record.company_name,
+                    record.status,
+                    parse_iso_datetime(record.started_at),
+                    record.microsite_slug,
+                    Jsonb(record.model_dump()),
+                ),
+            )
+    trim_table("generation_runs", "started_at", 250)
 
 
 def load_request_events() -> list[ApiRequestEvent]:
-    return [ApiRequestEvent.model_validate(item) for item in load_json_list(REQUESTS_PATH)]
+    with get_db_connection() as connection, connection.cursor() as cursor:
+        cursor.execute("SELECT payload FROM api_request_events ORDER BY occurred_at DESC")
+        rows = cursor.fetchall()
+    return [ApiRequestEvent.model_validate(normalize_payload(row[0])) for row in rows]
 
 
 def load_prompts() -> list[PromptLibraryItem]:
-    return [PromptLibraryItem.model_validate(item) for item in load_json_list(PROMPTS_PATH)]
+    with get_db_connection() as connection, connection.cursor() as cursor:
+        cursor.execute("SELECT payload FROM prompt_library ORDER BY updated_at DESC")
+        rows = cursor.fetchall()
+    return [PromptLibraryItem.model_validate(normalize_payload(row[0])) for row in rows]
 
 
 def save_prompts(records: list[PromptLibraryItem]) -> None:
-    save_json_list(PROMPTS_PATH, [record.model_dump() for record in records])
+    with get_db_connection() as connection, connection.cursor() as cursor:
+        for record in records:
+            cursor.execute(
+                """
+                INSERT INTO prompt_library (id, slug, stage, is_active, created_at, updated_at, payload)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    slug = EXCLUDED.slug,
+                    stage = EXCLUDED.stage,
+                    is_active = EXCLUDED.is_active,
+                    created_at = EXCLUDED.created_at,
+                    updated_at = EXCLUDED.updated_at,
+                    payload = EXCLUDED.payload
+                """,
+                (
+                    record.id,
+                    record.slug,
+                    record.stage,
+                    record.is_active,
+                    parse_iso_datetime(record.created_at),
+                    parse_iso_datetime(record.updated_at),
+                    Jsonb(record.model_dump()),
+                ),
+            )
 
 
 def save_request_events(records: list[ApiRequestEvent]) -> None:
-    save_json_list(REQUESTS_PATH, [record.model_dump() for record in records])
+    with get_db_connection() as connection, connection.cursor() as cursor:
+        for record in records:
+            cursor.execute(
+                """
+                INSERT INTO api_request_events (id, path, method, status_code, occurred_at, payload)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    path = EXCLUDED.path,
+                    method = EXCLUDED.method,
+                    status_code = EXCLUDED.status_code,
+                    occurred_at = EXCLUDED.occurred_at,
+                    payload = EXCLUDED.payload
+                """,
+                (
+                    record.id,
+                    record.path,
+                    record.method,
+                    record.status_code,
+                    parse_iso_datetime(record.occurred_at),
+                    Jsonb(record.model_dump()),
+                ),
+            )
+    trim_table("api_request_events", "occurred_at", 250)
 
 
 def append_request_event(event: ApiRequestEvent) -> None:
-    events = load_request_events()
-    events = [event, *events][:250]
-    save_request_events(events)
+    save_request_events([event])
 
 
 def ensure_default_prompts() -> None:
@@ -503,6 +599,28 @@ def ensure_default_prompts() -> None:
         for item in DEFAULT_PROMPTS
     ]
     save_prompts(seeded)
+
+
+def migrate_json_file_to_database() -> None:
+    if not table_has_rows("prompt_library"):
+        prompt_items = [PromptLibraryItem.model_validate(item) for item in load_json_list(PROMPTS_PATH)]
+        if prompt_items:
+            save_prompts(prompt_items)
+
+    if not table_has_rows("microsites"):
+        microsite_items = [MicrositeRecord.model_validate(item) for item in load_json_list(MICROSITES_PATH)]
+        if microsite_items:
+            save_microsites(microsite_items)
+
+    if not table_has_rows("generation_runs"):
+        run_items = [GenerationRunRecord.model_validate(item) for item in load_json_list(RUNS_PATH)]
+        if run_items:
+            save_runs(run_items)
+
+    if not table_has_rows("api_request_events"):
+        request_items = [ApiRequestEvent.model_validate(item) for item in load_json_list(REQUESTS_PATH)]
+        if request_items:
+            save_request_events(request_items)
 
 
 def read_project_markdown(relative_path: str) -> str:
@@ -1097,6 +1215,8 @@ async def log_request_latency(request: Request, call_next):
 @app.on_event("startup")
 def on_startup() -> None:
     ensure_storage()
+    ensure_database_tables()
+    migrate_json_file_to_database()
     ensure_default_prompts()
 
 
@@ -1111,6 +1231,7 @@ def health() -> dict[str, Any]:
 
     return {
         "status": "ok",
+        "persistence": "postgres",
         "microsites": len(load_microsites()),
         "runs": len(load_runs()),
         "prompts": len(load_prompts()),
