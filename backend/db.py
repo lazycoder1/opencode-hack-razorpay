@@ -328,24 +328,27 @@ def save_microsite(record: dict[str, Any]) -> None:
     sql = """
     INSERT INTO microsites (
         id, slug, company_name, tenant_key, source_company, headline, tagline, summary,
-        html, council_run_id, metadata
+        html, council_run_id, metadata, generated_at
     ) VALUES (
         %(id)s, %(slug)s, %(company_name)s, %(tenant_key)s, %(source_company)s,
         %(headline)s, %(tagline)s, %(summary)s,
-        %(html)s, %(council_run_id)s, %(metadata)s
+        %(html)s, %(council_run_id)s, %(metadata)s, %(generated_at)s
     )
     ON CONFLICT (slug) DO UPDATE SET
         tenant_key = EXCLUDED.tenant_key,
         html = EXCLUDED.html,
         headline = EXCLUDED.headline,
         summary = EXCLUDED.summary,
-        metadata = EXCLUDED.metadata
+        metadata = EXCLUDED.metadata,
+        generated_at = EXCLUDED.generated_at
     """
+    from datetime import datetime, timezone
     with get_conn() as conn:
         conn.execute(sql, {
             **record,
             "tenant_key": record.get("tenant_key") or tenant_key(record.get("source_company", "")),
             "metadata": Jsonb(record.get("metadata", {})),
+            "generated_at": record.get("generated_at") or datetime.now(timezone.utc).isoformat(),
         })
         conn.commit()
 
