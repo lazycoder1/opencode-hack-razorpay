@@ -80,9 +80,12 @@ export default function ObservabilityPage() {
   const [langsmith, setLangsmith] = useState<LangSmithStatus | null>(null);
   const [selectedRunId, setSelectedRunId] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadObservability() {
+      setLoading(true);
+
       try {
         const [runsResponse, requestsResponse, langsmithResponse, councilResponse] = await Promise.all([
           fetch(`${apiBaseUrl}/api/observability/runs`),
@@ -164,6 +167,8 @@ export default function ObservabilityPage() {
         setSelectedRunId(merged[0]?.id ?? "");
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : "Unable to load observability data");
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -234,6 +239,16 @@ export default function ObservabilityPage() {
 
       {error ? <p className="errorText">{error}</p> : null}
 
+      {loading ? (
+        <section className="panel pageLoading">
+          <div className="pageSpinner" />
+          <div>
+            <p className="kicker">Observability loading</p>
+            <h2 className="sectionTitle">Collecting traces, request logs, and LangSmith status.</h2>
+          </div>
+        </section>
+      ) : null}
+
       <section className="opsGrid">
         <aside className="panel selectorPanel">
           <div className="panelHeader compactHeader">
@@ -243,7 +258,11 @@ export default function ObservabilityPage() {
             </div>
           </div>
 
-          {runs.length === 0 ? (
+          {loading ? (
+            <div className="emptyPanel">
+              <p>Loading run history...</p>
+            </div>
+          ) : runs.length === 0 ? (
             <div className="emptyPanel">
               <p>No runs captured yet.</p>
             </div>
@@ -268,7 +287,11 @@ export default function ObservabilityPage() {
           )}
         </aside>
 
-        {!selectedRun ? (
+        {loading ? (
+          <div className="emptyPanel">
+            <p>Loading run detail...</p>
+          </div>
+        ) : !selectedRun ? (
           <div className="emptyPanel">
             <p>Select a run when generation records are available.</p>
           </div>

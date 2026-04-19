@@ -1436,9 +1436,27 @@ button {
   padding: 28px;
 }
 
+.pageLoading {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-top: 18px;
+  padding: 24px 28px;
+}
+
 .sandboxSpinner {
   width: 36px;
   height: 36px;
+  flex-shrink: 0;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: sandboxSpin 0.8s linear infinite;
+}
+
+.pageSpinner {
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
   border: 3px solid var(--line);
   border-top-color: var(--accent);

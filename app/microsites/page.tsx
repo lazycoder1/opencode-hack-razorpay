@@ -20,9 +20,12 @@ export default function MicrositesPage() {
   const [microsites, setMicrosites] = useState<MicrositeRecord[]>([]);
   const [selectedSlug, setSelectedSlug] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadMicrosites() {
+      setLoading(true);
+
       try {
         const response = await fetch(`${apiBaseUrl}/api/microsites`);
         if (!response.ok) {
@@ -34,6 +37,8 @@ export default function MicrositesPage() {
         setSelectedSlug(data[0]?.slug ?? "");
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : "Unable to load microsites");
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -93,6 +98,16 @@ export default function MicrositesPage() {
 
       {error ? <p className="errorText">{error}</p> : null}
 
+      {loading ? (
+        <section className="panel pageLoading">
+          <div className="pageSpinner" />
+          <div>
+            <p className="kicker">Microsites loading</p>
+            <h2 className="sectionTitle">Pulling the latest route library and preview state.</h2>
+          </div>
+        </section>
+      ) : null}
+
       <section className="libraryGrid">
         <aside className="panel selectorPanel">
           <div className="panelHeader compactHeader">
@@ -102,7 +117,11 @@ export default function MicrositesPage() {
             </div>
           </div>
 
-          {microsites.length === 0 ? (
+          {loading ? (
+            <div className="emptyPanel">
+              <p>Loading microsites...</p>
+            </div>
+          ) : microsites.length === 0 ? (
             <div className="emptyPanel">
               <p>No microsites generated yet.</p>
             </div>
@@ -127,7 +146,11 @@ export default function MicrositesPage() {
           )}
         </aside>
 
-        {!selectedMicrosite ? (
+        {loading ? (
+          <div className="emptyPanel">
+            <p>Loading selected microsite preview...</p>
+          </div>
+        ) : !selectedMicrosite ? (
           <div className="emptyPanel">
             <p>Select a microsite when routes are available.</p>
           </div>
