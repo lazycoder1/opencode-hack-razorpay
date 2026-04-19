@@ -26,6 +26,10 @@ type GenerationRun = {
   total_tokens: number | null;
   llm_duration_ms: number | null;
   microsite_slug: string | null;
+  langsmith_project: string | null;
+  langsmith_trace_id: string | null;
+  langsmith_run_id: string | null;
+  langsmith_trace_url: string | null;
   error: string | null;
   steps: RunStep[];
 };
@@ -39,20 +43,41 @@ type ApiRequestEvent = {
   occurred_at: string;
 };
 
+type LangSmithRunSummary = {
+  id: string;
+  name: string | null;
+  run_type: string | null;
+  status: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  trace_id: string | null;
+  url: string | null;
+};
+
+type LangSmithStatus = {
+  enabled: boolean;
+  project_name: string | null;
+  api_url: string | null;
+  project_url: string | null;
+  recent_runs: LangSmithRunSummary[];
+};
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 export default function ObservabilityPage() {
   const [runs, setRuns] = useState<GenerationRun[]>([]);
   const [requests, setRequests] = useState<ApiRequestEvent[]>([]);
+  const [langsmith, setLangsmith] = useState<LangSmithStatus | null>(null);
   const [selectedRunId, setSelectedRunId] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     async function loadObservability() {
       try {
-        const [runsResponse, requestsResponse] = await Promise.all([
+        const [runsResponse, requestsResponse, langsmithResponse] = await Promise.all([
           fetch(`${apiBaseUrl}/api/observability/runs`),
           fetch(`${apiBaseUrl}/api/observability/requests`),
+          fetch(`${apiBaseUrl}/api/observability/langsmith`),
         ]);
 
         if (!runsResponse.ok) {
@@ -63,10 +88,16 @@ export default function ObservabilityPage() {
           throw new Error(`Unable to load requests: ${requestsResponse.status}`);
         }
 
+        if (!langsmithResponse.ok) {
+          throw new Error(`Unable to load LangSmith status: ${langsmithResponse.status}`);
+        }
+
         const runsData: GenerationRun[] = await runsResponse.json();
         const requestsData: ApiRequestEvent[] = await requestsResponse.json();
+        const langsmithData: LangSmithStatus = await langsmithResponse.json();
         setRuns(runsData);
         setRequests(requestsData);
+        setLangsmith(langsmithData);
         setSelectedRunId(runsData[0]?.id ?? "");
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : "Unable to load observability data");
@@ -130,6 +161,10 @@ export default function ObservabilityPage() {
           <article className="metricCard">
             <span>Avg latency</span>
             <strong>{averageLatency?.toFixed(1) ?? "-"} ms</strong>
+          </article>
+          <article className="metricCard">
+            <span>LangSmith</span>
+            <strong>{langsmith?.enabled ? "Connected" : "Off"}</strong>
           </article>
         </div>
       </section>
@@ -225,6 +260,20 @@ export default function ObservabilityPage() {
                 </p>
               </div>
 
+              <div className="promptPanel">
+                <p className="miniLabel">LangSmith trace</p>
+                <p>
+                  {selectedRun.langsmith_project
+                    ? `Project: ${selectedRun.langsmith_project}`
+                    : "No LangSmith project recorded for this run."}
+                </p>
+                {selectedRun.langsmith_trace_url ? (
+                  <a className="textLink" href={selectedRun.langsmith_trace_url} rel="noreferrer" target="_blank">
+                    Open LangSmith trace
+                  </a>
+                ) : null}
+              </div>
+
               {selectedRun.error ? <p className="errorText">{selectedRun.error}</p> : null}
 
               {selectedRun.microsite_slug ? (
@@ -262,6 +311,53 @@ export default function ObservabilityPage() {
                     </article>
                   ))}
                 </div>
+              </article>
+
+              <article className="panel detailPanel">
+                <div className="panelHeader compactHeader">
+                  <div>
+                    <p className="kicker">LangSmith</p>
+                    <h2 className="sectionTitle">Hosted tracing</h2>
+                  </div>
+                </div>
+
+                {!langsmith ? (
+                  <div className="emptyPanel">
+                    <p>LangSmith status unavailable.</p>
+                  </div>
+                ) : (
+                  <div className="detailStack">
+                    <div className="promptPanel">
+                      <p className="miniLabel">Project</p>
+                      <p>{langsmith.project_name ?? "Not configured"}</p>
+                      {langsmith.project_url ? (
+                        <a className="textLink" href={langsmith.project_url} rel="noreferrer" target="_blank">
+                          Open LangSmith project
+                        </a>
+                      ) : null}
+                    </div>
+
+                    <div className="requestList">
+                      {langsmith.recent_runs.map((run) => (
+                        <article className="requestItem" key={run.id}>
+                          <div className="requestInfo">
+                            <p className="miniLabel">{run.run_type ?? "trace"}</p>
+                            <strong>{run.name ?? run.id}</strong>
+                            <p>{run.start_time ? new Date(run.start_time).toLocaleString() : "Unknown time"}</p>
+                          </div>
+                          <div className="requestMeta">
+                            <span>{run.status ?? "unknown"}</span>
+                            {run.url ? (
+                              <a className="textLink" href={run.url} rel="noreferrer" target="_blank">
+                                Open
+                              </a>
+                            ) : null}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </article>
 
               <article className="panel detailPanel">

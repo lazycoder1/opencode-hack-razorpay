@@ -13,8 +13,12 @@ import time
 from typing import Any
 from uuid import uuid4
 
-from backend.council import run_council
-from backend.db import ensure_schema, save_eval_result
+try:
+    from .council import run_council
+    from .db import ensure_schema, save_eval_result
+except ImportError:
+    from council import run_council
+    from db import ensure_schema, save_eval_result
 
 logger = logging.getLogger("evals")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")

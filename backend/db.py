@@ -72,6 +72,26 @@ CREATE TABLE IF NOT EXISTS microsites (
 
 CREATE INDEX IF NOT EXISTS idx_microsites_slug ON microsites(slug);
 
+CREATE TABLE IF NOT EXISTS seller_research_cache (
+    id              TEXT PRIMARY KEY,
+    company_name    TEXT NOT NULL,
+    company_key     TEXT UNIQUE NOT NULL,
+    research_output TEXT NOT NULL DEFAULT '',
+    prompt_system   TEXT NOT NULL DEFAULT '',
+    prompt_user     TEXT NOT NULL DEFAULT '',
+    model_name      TEXT,
+    input_tokens    INTEGER,
+    output_tokens   INTEGER,
+    total_tokens    INTEGER,
+    cost_usd        DOUBLE PRECISION,
+    duration_ms     DOUBLE PRECISION,
+    metadata        JSONB NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_seller_cache_key ON seller_research_cache(company_key);
+
 CREATE TABLE IF NOT EXISTS eval_results (
     id              TEXT PRIMARY KEY,
     eval_name       TEXT NOT NULL,
@@ -239,6 +259,76 @@ def list_eval_results(limit: int = 50) -> list[dict[str, Any]]:
     sql = "SELECT * FROM eval_results ORDER BY created_at DESC LIMIT %s"
     with get_conn() as conn:
         cur = conn.execute(sql, (limit,))
+        cols = [desc.name for desc in cur.description]
+        rows = cur.fetchall()
+    return [_row_to_dict(cols, row) for row in rows]
+
+
+# ---------------------------------------------------------------------------
+# Seller research cache
+# ---------------------------------------------------------------------------
+
+def _company_key(name: str) -> str:
+    """Normalize company name to a stable cache key."""
+    return name.strip().lower().replace(" ", "_")
+
+
+def get_cached_seller_research(company_name: str) -> dict[str, Any] | None:
+    sql = "SELECT * FROM seller_research_cache WHERE company_key = %s"
+    with get_conn() as conn:
+        cur = conn.execute(sql, (_company_key(company_name),))
+        cols = [desc.name for desc in cur.description]
+        row = cur.fetchone()
+    return _row_to_dict(cols, row) if row else None
+
+
+def save_seller_research_cache(record: dict[str, Any]) -> None:
+    sql = """
+    INSERT INTO seller_research_cache (
+        id, company_name, company_key, research_output,
+        prompt_system, prompt_user, model_name,
+        input_tokens, output_tokens, total_tokens,
+        cost_usd, duration_ms, metadata
+    ) VALUES (
+        %(id)s, %(company_name)s, %(company_key)s, %(research_output)s,
+        %(prompt_system)s, %(prompt_user)s, %(model_name)s,
+        %(input_tokens)s, %(output_tokens)s, %(total_tokens)s,
+        %(cost_usd)s, %(duration_ms)s, %(metadata)s
+    )
+    ON CONFLICT (company_key) DO UPDATE SET
+        research_output = EXCLUDED.research_output,
+        prompt_system = EXCLUDED.prompt_system,
+        prompt_user = EXCLUDED.prompt_user,
+        model_name = EXCLUDED.model_name,
+        input_tokens = EXCLUDED.input_tokens,
+        output_tokens = EXCLUDED.output_tokens,
+        total_tokens = EXCLUDED.total_tokens,
+        cost_usd = EXCLUDED.cost_usd,
+        duration_ms = EXCLUDED.duration_ms,
+        metadata = EXCLUDED.metadata,
+        updated_at = now()
+    """
+    with get_conn() as conn:
+        conn.execute(sql, {
+            **record,
+            "company_key": _company_key(record["company_name"]),
+            "metadata": Jsonb(record.get("metadata", {})),
+        })
+        conn.commit()
+
+
+def invalidate_seller_research_cache(company_name: str) -> bool:
+    sql = "DELETE FROM seller_research_cache WHERE company_key = %s"
+    with get_conn() as conn:
+        cur = conn.execute(sql, (_company_key(company_name),))
+        conn.commit()
+        return (cur.rowcount or 0) > 0
+
+
+def list_seller_research_cache() -> list[dict[str, Any]]:
+    sql = "SELECT id, company_name, company_key, model_name, input_tokens, output_tokens, cost_usd, duration_ms, created_at, updated_at, length(research_output) as output_chars FROM seller_research_cache ORDER BY updated_at DESC"
+    with get_conn() as conn:
+        cur = conn.execute(sql)
         cols = [desc.name for desc in cur.description]
         rows = cur.fetchall()
     return [_row_to_dict(cols, row) for row in rows]

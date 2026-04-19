@@ -68,6 +68,8 @@ export default function SandboxPage() {
   const [runningStage, setRunningStage] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<"preview" | "source" | "trace" | "research">("trace");
+  const [forceSellerRefresh, setForceSellerRefresh] = useState(false);
+  const [sellerCache, setSellerCache] = useState<Record<string, unknown> | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -84,7 +86,21 @@ export default function SandboxPage() {
         });
       })
       .catch(() => {});
+
+    // Check seller cache for the default source company
+    fetch(`${apiBaseUrl}/api/cache/seller-research/Razorpay`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setSellerCache(data))
+      .catch(() => {});
   }, []);
+
+  function checkSellerCache(company: string) {
+    if (!company.trim()) { setSellerCache(null); return; }
+    fetch(`${apiBaseUrl}/api/cache/seller-research/${encodeURIComponent(company)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setSellerCache(data))
+      .catch(() => setSellerCache(null));
+  }
 
   function updatePrompt(stage: StageKey, key: "system" | "user", value: string) {
     setPrompts((prev) => ({ ...prev, [stage]: { ...prev[stage], [key]: value } }));
@@ -163,6 +179,7 @@ export default function SandboxPage() {
         body: JSON.stringify({
           prospect,
           source_company: sourceCompany,
+          force_seller_refresh: forceSellerRefresh,
           stage_prompts: {
             manager_plan_system: prompts.manager_plan.system,
             manager_plan_user: prompts.manager_plan.user,
@@ -241,7 +258,7 @@ export default function SandboxPage() {
             <strong>Source company (seller)</strong>
             <span className="fieldHint">Who is pitching</span>
           </div>
-          <input className="prospectInput sandboxInput" value={sourceCompany} onChange={(e) => setSourceCompany(e.target.value)} />
+          <input className="prospectInput sandboxInput" value={sourceCompany} onChange={(e) => { setSourceCompany(e.target.value); checkSellerCache(e.target.value); }} />
         </label>
         <label className="fieldStack sandboxField">
           <div className="fieldTop">
@@ -253,6 +270,20 @@ export default function SandboxPage() {
       </section>
 
       <section className="sandboxActions">
+        <div className="cacheRow">
+          {sellerCache ? (
+            <span className="statusChip statusReady">
+              Seller research cached for {sourceCompany} &middot; updated {new Date(sellerCache.updated_at as string).toLocaleDateString()}
+            </span>
+          ) : (
+            <span className="statusChip statusPending">No cached seller research for {sourceCompany}</span>
+          )}
+          <label className="cacheToggle">
+            <input type="checkbox" checked={forceSellerRefresh} onChange={(e) => setForceSellerRefresh(e.target.checked)} />
+            <span>Force re-research seller</span>
+          </label>
+        </div>
+
         <div className="actionRow">
           <button className="buttonPrimary" type="button" disabled={loading || !prospect.trim() || !sourceCompany.trim()} onClick={runFullPipeline}>
             {loading ? "Council running..." : "Run full pipeline"}

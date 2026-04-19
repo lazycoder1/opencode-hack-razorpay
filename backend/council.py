@@ -260,6 +260,9 @@ class CouncilState(TypedDict, total=False):
     # Per-stage prompt overrides
     prompts: dict[str, dict[str, str]]
 
+    # Cache control
+    force_seller_refresh: bool
+
     # Stage outputs
     generation_plan: str
     seller_research: str
@@ -351,7 +354,77 @@ def manager_plan_node(state: CouncilState) -> CouncilState:
 
 
 def seller_research_node(state: CouncilState) -> CouncilState:
-    return _run_agent_node(state, "seller_research", "seller_researcher", temperature=0.3, output_key="seller_research")
+    """Check cache first. Only call LLM if no cached research exists."""
+    try:
+        from .db import get_cached_seller_research, save_seller_research_cache
+    except ImportError:
+        from db import get_cached_seller_research, save_seller_research_cache
+
+    company = state.get("source_company", "")
+    force_refresh = state.get("force_seller_refresh", False)
+
+    if not force_refresh:
+        try:
+            cached = get_cached_seller_research(company)
+            if cached and cached.get("research_output", "").strip():
+                logger.info("Seller research cache HIT for %s", company)
+                step = AgentStepResult(
+                    step_name="seller_research",
+                    agent_role="seller_researcher",
+                    status="cached",
+                    started_at=utc_now_iso(),
+                    duration_ms=0.0,
+                    output=cached["research_output"][:500],
+                    model_name=cached.get("model_name"),
+                    input_tokens=cached.get("input_tokens"),
+                    output_tokens=cached.get("output_tokens"),
+                    total_tokens=cached.get("total_tokens"),
+                    cost_usd=0.0,
+                    metadata={
+                        "cache": "hit",
+                        "company": company,
+                        "cached_at": cached.get("updated_at", cached.get("created_at", "")),
+                        "output_chars": len(cached["research_output"]),
+                    },
+                )
+                return {
+                    "seller_research": cached["research_output"],
+                    "steps": [*state.get("steps", []), step.model_dump()],
+                }
+        except Exception:
+            logger.exception("Seller research cache lookup failed, falling back to LLM")
+
+    # Cache miss or forced refresh -- run the agent
+    result = _run_agent_node(state, "seller_research", "seller_researcher", temperature=0.3, output_key="seller_research")
+
+    # Persist to cache
+    research_output = result.get("seller_research", "")
+    if research_output.strip():
+        last_step = result.get("steps", [])[-1] if result.get("steps") else {}
+        try:
+            save_seller_research_cache({
+                "id": uuid4().hex,
+                "company_name": company,
+                "research_output": research_output,
+                "prompt_system": _render(_get_prompt(state, "seller_research", "system"), state),
+                "prompt_user": _render(_get_prompt(state, "seller_research", "user"), state),
+                "model_name": last_step.get("model_name"),
+                "input_tokens": last_step.get("input_tokens"),
+                "output_tokens": last_step.get("output_tokens"),
+                "total_tokens": last_step.get("total_tokens"),
+                "cost_usd": last_step.get("cost_usd"),
+                "duration_ms": last_step.get("duration_ms"),
+                "metadata": {"cache": "miss", "forced_refresh": force_refresh},
+            })
+            logger.info("Seller research cached for %s", company)
+        except Exception:
+            logger.exception("Failed to cache seller research for %s", company)
+
+        # Mark the step as cache miss
+        if result.get("steps"):
+            result["steps"][-1]["metadata"] = {**result["steps"][-1].get("metadata", {}), "cache": "miss"}
+
+    return result
 
 
 def prospect_research_node(state: CouncilState) -> CouncilState:
@@ -478,6 +551,7 @@ def run_council(
     skill_prompt: str = "",
     user_prompt_template: str = "",
     stage_prompts: StagePrompts | None = None,
+    force_seller_refresh: bool = False,
 ) -> CouncilRunResult:
     run_id = uuid4().hex
     run_started_at = utc_now_iso()
@@ -511,6 +585,7 @@ def run_council(
         "prospect": prospect,
         "source_company": source_company,
         "prompts": prompts,
+        "force_seller_refresh": force_seller_refresh,
         "steps": [],
     })
 

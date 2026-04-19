@@ -23,6 +23,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 import psycopg
 from psycopg.types.json import Jsonb
+from langsmith import Client as LangSmithClient, configure as configure_langsmith, traceable
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -150,6 +151,10 @@ class GenerationRunRecord(BaseModel):
     total_tokens: int | None = None
     llm_duration_ms: float | None = None
     microsite_slug: str | None = None
+    langsmith_project: str | None = None
+    langsmith_trace_id: str | None = None
+    langsmith_run_id: str | None = None
+    langsmith_trace_url: str | None = None
     error: str | None = None
     steps: list[RunStep] = Field(default_factory=list)
 
@@ -176,6 +181,25 @@ class CompanyProfileRecord(BaseModel):
     brand_markdown: str
     skills_markdown: str
     theme: MicrositeTheme
+
+
+class LangSmithRunSummary(BaseModel):
+    id: str
+    name: str | None = None
+    run_type: str | None = None
+    status: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    trace_id: str | None = None
+    url: str | None = None
+
+
+class LangSmithStatusResponse(BaseModel):
+    enabled: bool
+    project_name: str | None = None
+    api_url: str | None = None
+    project_url: str | None = None
+    recent_runs: list[LangSmithRunSummary] = Field(default_factory=list)
 
 
 class GenerationState(TypedDict, total=False):
@@ -327,6 +351,32 @@ app.add_middleware(
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def is_langsmith_tracing_enabled() -> bool:
+    return os.getenv("LANGSMITH_TRACING", "false").strip().lower() == "true"
+
+
+def get_langsmith_project_name() -> str | None:
+    project = os.getenv("LANGSMITH_PROJECT", "").strip()
+    return project or None
+
+
+def get_langsmith_api_url() -> str | None:
+    api_url = os.getenv("LANGSMITH_ENDPOINT", "").strip()
+    return api_url or None
+
+
+@lru_cache(maxsize=1)
+def get_langsmith_client() -> LangSmithClient | None:
+    api_key = os.getenv("LANGSMITH_API_KEY", "").strip()
+    if not api_key:
+        return None
+    api_url = get_langsmith_api_url()
+    kwargs: dict[str, Any] = {"api_key": api_key}
+    if api_url:
+        kwargs["api_url"] = api_url
+    return LangSmithClient(**kwargs)
 
 
 @lru_cache(maxsize=1)
@@ -656,6 +706,52 @@ def get_company_profile(profile_id: str) -> CompanyProfileRecord:
         if profile.id == normalized:
             return profile
     raise HTTPException(status_code=404, detail=f"Company profile '{profile_id}' was not found")
+
+
+def get_langsmith_status() -> LangSmithStatusResponse:
+    if not is_langsmith_tracing_enabled():
+        return LangSmithStatusResponse(enabled=False)
+
+    client = get_langsmith_client()
+    project_name = get_langsmith_project_name()
+    if client is None or project_name is None:
+        return LangSmithStatusResponse(
+            enabled=False,
+            project_name=project_name,
+            api_url=get_langsmith_api_url(),
+        )
+
+    try:
+        project = client.read_project(project_name=project_name)
+        project_url = project.url
+    except Exception:
+        project_url = None
+
+    recent_runs: list[LangSmithRunSummary] = []
+    try:
+        for run in client.list_runs(project_name=project_name, is_root=True, limit=10):
+            recent_runs.append(
+                LangSmithRunSummary(
+                    id=str(run.id),
+                    name=getattr(run, "name", None),
+                    run_type=getattr(run, "run_type", None),
+                    status="error" if getattr(run, "error", None) else "completed",
+                    start_time=getattr(run, "start_time", None).isoformat() if getattr(run, "start_time", None) else None,
+                    end_time=getattr(run, "end_time", None).isoformat() if getattr(run, "end_time", None) else None,
+                    trace_id=str(getattr(run, "trace_id", "")) or None,
+                    url=getattr(run, "url", None),
+                )
+            )
+    except Exception as exc:
+        logger.warning("Unable to query LangSmith runs: %s", exc)
+
+    return LangSmithStatusResponse(
+        enabled=True,
+        project_name=project_name,
+        api_url=get_langsmith_api_url(),
+        project_url=project_url,
+        recent_runs=recent_runs,
+    )
 
 
 def normalize_prompt_stage(stage: str) -> str:
@@ -1135,6 +1231,21 @@ def get_generation_graph() -> Any:
     return graph.compile()
 
 
+@traceable(name="microsite_generation_job", run_type="chain")
+def invoke_generation_graph(
+    state_input: dict[str, Any],
+    run_tree: Any = None,
+) -> dict[str, Any]:
+    state = get_generation_graph().invoke(state_input)
+    langsmith_info = {
+        "project": get_langsmith_project_name(),
+        "trace_id": str(getattr(run_tree, "trace_id", "")) or None,
+        "run_id": str(getattr(run_tree, "id", "")) or None,
+        "trace_url": run_tree.get_url() if run_tree is not None and hasattr(run_tree, "get_url") else None,
+    }
+    return {"state": state, "langsmith": langsmith_info}
+
+
 def save_generation_run(record: GenerationRunRecord) -> None:
     runs = load_runs()
     runs = [record, *runs]
@@ -1146,14 +1257,26 @@ def run_generation(company_name: str, source_company_profile_id: str) -> tuple[M
     start_perf = time.perf_counter()
     run_id = uuid4().hex
     source_company_profile = get_company_profile(source_company_profile_id)
-    state = get_generation_graph().invoke(
+    invocation = invoke_generation_graph(
         {
             "run_id": run_id,
             "company_name": company_name,
             "source_company_profile_id": source_company_profile.id,
             "steps": [],
-        }
+        },
+        langsmith_extra={
+            "metadata": {
+                "local_run_id": run_id,
+                "source_company_profile_id": source_company_profile.id,
+                "prospect_company_name": company_name,
+            },
+            "tags": ["microsite", source_company_profile.id],
+            "project_name": get_langsmith_project_name(),
+            "client": get_langsmith_client(),
+        },
     )
+    state = invocation["state"]
+    langsmith_info = invocation.get("langsmith", {})
 
     microsite_payload = state.get("microsite")
     microsite = MicrositeRecord.model_validate(microsite_payload) if microsite_payload else None
@@ -1171,6 +1294,10 @@ def run_generation(company_name: str, source_company_profile_id: str) -> tuple[M
         total_tokens=(state.get("usage") or {}).get("total_tokens"),
         llm_duration_ms=state.get("llm_duration_ms"),
         microsite_slug=microsite.slug if microsite else None,
+        langsmith_project=langsmith_info.get("project"),
+        langsmith_trace_id=langsmith_info.get("trace_id"),
+        langsmith_run_id=langsmith_info.get("run_id"),
+        langsmith_trace_url=langsmith_info.get("trace_url"),
         error=state.get("error"),
         steps=[
             RunStep.model_validate(
@@ -1218,6 +1345,13 @@ def on_startup() -> None:
     ensure_database_tables()
     migrate_json_file_to_database()
     ensure_default_prompts()
+    configure_langsmith(
+        client=get_langsmith_client(),
+        enabled=is_langsmith_tracing_enabled(),
+        project_name=get_langsmith_project_name(),
+        metadata={"app": "website-creator", "surface": "microsite-generation"},
+        tags=["opencode-hack", "microsites"],
+    )
 
 
 @app.get("/api/health")
@@ -1238,6 +1372,7 @@ def health() -> dict[str, Any]:
         "company_profiles": len(COMPANY_PROFILE_CONFIG),
         "model": get_openai_model_name(),
         "langsmith_tracing": os.getenv("LANGSMITH_TRACING", "false"),
+        "langsmith_project": get_langsmith_project_name(),
         "mcp_enabled": bool(mcp_servers),
         "mcp_servers": mcp_servers,
         "mcp_config_error": mcp_config_error,
@@ -1386,6 +1521,11 @@ def get_microsite_by_slug(slug: str) -> MicrositeRecord:
 @app.get("/api/observability/runs", response_model=list[GenerationRunRecord])
 def list_generation_runs() -> list[GenerationRunRecord]:
     return load_runs()
+
+
+@app.get("/api/observability/langsmith", response_model=LangSmithStatusResponse)
+def observability_langsmith() -> LangSmithStatusResponse:
+    return get_langsmith_status()
 
 
 @app.get("/api/observability/runs/{run_id}", response_model=GenerationRunRecord)
@@ -1569,9 +1709,15 @@ def sandbox_generate_compat(request: SandboxStepRequest) -> SandboxStepResult:
 # Council endpoints
 # ---------------------------------------------------------------------------
 
-from backend.council import CouncilRunResult, StagePrompts, AgentStepResult as CouncilStepResult, run_council, run_single_stage, DEFAULT_PROMPTS as COUNCIL_DEFAULT_PROMPTS  # noqa: E402
-from backend import db as pgdb  # noqa: E402
-from backend.evals import EVAL_CASES, run_eval_case, run_all_evals, DEFAULT_SKILL as EVAL_DEFAULT_SKILL, DEFAULT_PROMPT as EVAL_DEFAULT_PROMPT  # noqa: E402
+try:  # noqa: E402
+    from .council import CouncilRunResult, StagePrompts, AgentStepResult as CouncilStepResult, run_council, run_single_stage, DEFAULT_PROMPTS as COUNCIL_DEFAULT_PROMPTS
+    from . import db as pgdb
+    from .evals import EVAL_CASES, run_eval_case, run_all_evals, DEFAULT_SKILL as EVAL_DEFAULT_SKILL, DEFAULT_PROMPT as EVAL_DEFAULT_PROMPT
+except ImportError:  # Railway can load this module as top-level `main`
+    from council import CouncilRunResult, StagePrompts, AgentStepResult as CouncilStepResult, run_council, run_single_stage, DEFAULT_PROMPTS as COUNCIL_DEFAULT_PROMPTS
+    import db as pgdb
+    from evals import EVAL_CASES, run_eval_case, run_all_evals, DEFAULT_SKILL as EVAL_DEFAULT_SKILL, DEFAULT_PROMPT as EVAL_DEFAULT_PROMPT
+
 from fastapi.responses import HTMLResponse  # noqa: E402
 
 
@@ -1581,6 +1727,7 @@ class CouncilRunRequest(BaseModel):
     skill_prompt: str = Field(default="", description="Legacy: generator system prompt")
     user_prompt_template: str = Field(default="", description="Legacy: generator user prompt template")
     stage_prompts: StagePrompts | None = None
+    force_seller_refresh: bool = False
 
 
 class SingleStageRequest(BaseModel):
@@ -1599,6 +1746,35 @@ def ensure_postgres_schema() -> None:
         logger.info("Postgres schema ready")
     except Exception:
         logger.exception("Postgres schema bootstrap failed -- DB features will be unavailable")
+
+
+# ---------------------------------------------------------------------------
+# Seller research cache endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/cache/seller-research")
+def list_seller_cache() -> list[dict[str, Any]]:
+    try:
+        return pgdb.list_seller_research_cache()
+    except Exception:
+        logger.exception("Failed to list seller research cache")
+        return []
+
+
+@app.get("/api/cache/seller-research/{company_name}")
+def get_seller_cache(company_name: str) -> dict[str, Any]:
+    record = pgdb.get_cached_seller_research(company_name)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"No cached research for '{company_name}'")
+    return record
+
+
+@app.delete("/api/cache/seller-research/{company_name}")
+def invalidate_seller_cache(company_name: str) -> dict[str, bool]:
+    deleted = pgdb.invalidate_seller_research_cache(company_name)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"No cached research for '{company_name}'")
+    return {"invalidated": True}
 
 
 @app.get("/api/council/default-prompts")
@@ -1635,6 +1811,7 @@ def council_run(request: CouncilRunRequest) -> CouncilRunResult:
         skill_prompt=request.skill_prompt,
         user_prompt_template=request.user_prompt_template,
         stage_prompts=request.stage_prompts,
+        force_seller_refresh=request.force_seller_refresh,
     )
     try:
         pgdb.save_council_run({

@@ -1359,6 +1359,27 @@ button {
   to { transform: rotate(360deg); }
 }
 
+.cacheRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.cacheToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--muted-strong);
+}
+
+.cacheToggle input {
+  accent-color: var(--accent);
+}
+
 .stageList {
   display: grid;
   gap: 12px;
