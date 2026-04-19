@@ -84,10 +84,11 @@ export default function ObservabilityPage() {
   useEffect(() => {
     async function loadObservability() {
       try {
-        const [runsResponse, requestsResponse, langsmithResponse] = await Promise.all([
+        const [runsResponse, requestsResponse, langsmithResponse, councilResponse] = await Promise.all([
           fetch(`${apiBaseUrl}/api/observability/runs`),
           fetch(`${apiBaseUrl}/api/observability/requests`),
           fetch(`${apiBaseUrl}/api/observability/langsmith`),
+          fetch(`${apiBaseUrl}/api/council/runs`),
         ]);
 
         if (!runsResponse.ok) {
@@ -98,17 +99,69 @@ export default function ObservabilityPage() {
           throw new Error(`Unable to load requests: ${requestsResponse.status}`);
         }
 
-        if (!langsmithResponse.ok) {
-          throw new Error(`Unable to load LangSmith status: ${langsmithResponse.status}`);
-        }
-
         const runsData: GenerationRun[] = await runsResponse.json();
         const requestsData: ApiRequestEvent[] = await requestsResponse.json();
-        const langsmithData: LangSmithStatus = await langsmithResponse.json();
-        setRuns(runsData);
+        const langsmithData: LangSmithStatus = langsmithResponse.ok ? await langsmithResponse.json() : { enabled: false, project_name: null, api_url: null, project_url: null, recent_runs: [] };
+
+        // Merge council runs into the same format
+        const councilRuns: GenerationRun[] = [];
+        if (councilResponse.ok) {
+          const councilData: Array<Record<string, unknown>> = await councilResponse.json();
+          for (const cr of councilData) {
+            const steps = (cr.steps as Array<Record<string, unknown>> ?? []).map((s) => ({
+              name: (s.step_name as string) ?? "",
+              status: (s.status as string) ?? "",
+              started_at: (s.started_at as string) ?? "",
+              ended_at: (s.started_at as string) ?? "",
+              duration_ms: (s.duration_ms as number) ?? 0,
+              metadata: {
+                agent_role: s.agent_role,
+                model_name: s.model_name,
+                input_tokens: s.input_tokens,
+                output_tokens: s.output_tokens,
+                cost_usd: s.cost_usd,
+                ...(s.metadata as Record<string, unknown> ?? {}),
+              },
+            }));
+            const totalTokens = steps.reduce((sum, s) => sum + ((s.metadata.input_tokens as number) ?? 0) + ((s.metadata.output_tokens as number) ?? 0), 0);
+            councilRuns.push({
+              id: cr.run_id as string,
+              company_name: `${cr.source_company} x ${cr.prospect}`,
+              status: cr.status as string,
+              started_at: cr.started_at as string,
+              completed_at: (cr.completed_at as string) ?? null,
+              total_duration_ms: (cr.total_duration_ms as number) ?? null,
+              model_name: steps.find((s) => s.metadata.model_name)?.metadata.model_name as string ?? null,
+              prompt_preview: null,
+              input_tokens: null,
+              output_tokens: null,
+              total_tokens: totalTokens || null,
+              llm_duration_ms: (cr.total_duration_ms as number) ?? null,
+              microsite_slug: null,
+              langsmith_project: null,
+              langsmith_trace_id: null,
+              langsmith_run_id: null,
+              langsmith_trace_url: null,
+              error: null,
+              steps,
+            });
+          }
+        }
+
+        // Merge and deduplicate by id, council runs first (newer)
+        const seenIds = new Set<string>();
+        const merged: GenerationRun[] = [];
+        for (const run of [...councilRuns, ...runsData]) {
+          if (!seenIds.has(run.id)) {
+            seenIds.add(run.id);
+            merged.push(run);
+          }
+        }
+
+        setRuns(merged);
         setRequests(requestsData);
         setLangsmith(langsmithData);
-        setSelectedRunId(runsData[0]?.id ?? "");
+        setSelectedRunId(merged[0]?.id ?? "");
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : "Unable to load observability data");
       }
