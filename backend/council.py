@@ -854,10 +854,10 @@ def _tavily_prospect_context(state: CouncilState) -> tuple[str, dict[str, Any]]:
         ]
 
     # Run general web search and Reddit search in parallel
-    search = run_parallel_searches(queries, per_query_results=4)
+    search = run_parallel_searches(queries, per_query_results=10)
     reddit_search: dict[str, list[dict[str, Any]]] = {}
     if reddit_queries:
-        reddit_search = run_parallel_searches(reddit_queries, per_query_results=3, include_domains=["reddit.com"])
+        reddit_search = run_parallel_searches(reddit_queries, per_query_results=10, include_domains=["reddit.com"])
 
     text = format_tavily_context(extracts, search, reddit_results=reddit_search)
     total_reddit_results = sum(len(v) for v in reddit_search.values())
@@ -923,7 +923,7 @@ def _tavily_seller_context(state: CouncilState) -> tuple[str, dict[str, Any]]:
             f'"{seller_name}" case studies customers',
             f'"{seller_name}" differentiators OR positioning',
         ]
-    search = run_parallel_searches(queries, per_query_results=3)
+    search = run_parallel_searches(queries, per_query_results=10)
     text = format_tavily_context(extracts, search)
     metadata = {"pages_extracted": len(extracts), "queries_run": len(queries), "is_followup": is_followup}
     return text, metadata
