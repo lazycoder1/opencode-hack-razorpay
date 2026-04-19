@@ -4,6 +4,14 @@
 
 Build a system that lets a user upload or enter a list of companies, click `Generate`, and create a unique sales microsite for each company.
 
+Near-term target output per prospect:
+
+- research JSON
+- pain points from web search
+- a 5-line narrative hook
+- a local file path to a generated HTML microsite
+- per-agent cost and duration logged to terminal
+
 The product has four core surfaces for today:
 
 - a create page to input or upload target companies
@@ -38,6 +46,23 @@ An internal operator creating outbound sales microsites for multiple target acco
 4. A `/microsites` page with a dropdown or selector to browse all generated microsites.
 5. Each microsite must live at its own unique route.
 
+## Target Demo Contract
+
+For a demo such as:
+
+- product context: `CRED`
+- prospect: `Razorpay`
+
+the system should be able to produce:
+
+1. structured Razorpay research JSON
+2. Razorpay pain points from web search
+3. a concise 5-line narrative hook
+4. a local microsite file path such as `backend/generated/cred-razorpay.html`
+5. per-agent cost and duration visible in terminal logs
+
+This is the most concrete short-term outcome and should guide implementation choices.
+
 ## MVP Scope
 
 ### In Scope
@@ -60,6 +85,8 @@ For the microsite-side implementation we should prioritize:
 - unique microsite detail route
 - microsite persistence
 - generation flow that reads stored research outputs
+- local HTML microsite artifact generation
+- observability from the first generation run onward
 
 The research UI can be developed in parallel as long as it writes the agreed backend records.
 
@@ -124,6 +151,8 @@ Outputs:
 - research prompt used for the run
 - research summary per company
 - extracted facts, themes, and notes that will feed generation
+- structured research JSON artifact
+- extracted pain points from web search
 
 ### Page 3: `/microsites`
 
@@ -156,6 +185,8 @@ Content can start simple for MVP:
 - summary/value proposition
 - generated sections from the pipeline
 
+For the target demo, a generated local HTML artifact is also a first-class deliverable, even if the route-based microsite exists in parallel.
+
 ## Functional Requirements
 
 ### Team Boundary
@@ -171,6 +202,7 @@ The microsite side is responsible for:
 
 - reading completed research artifacts
 - generating microsite records from those artifacts
+- generating a local HTML microsite artifact from those artifacts
 - rendering the `/microsites` list page
 - rendering unique microsite detail pages
 
@@ -195,6 +227,8 @@ The system must support:
 - persisting research outputs so generation can reuse them
 - tracking research status independently from generation status
 - allowing re-run of research without recreating the batch
+- outputting structured research JSON per company
+- outputting explicit pain point lists from web research
 
 ### Batch Generation
 
@@ -206,6 +240,7 @@ On `Generate`, the system must:
 - use the stored research prompt and research outputs as the main input to microsite generation
 - start one generation workflow per company
 - store status for each company generation
+- persist the local output path to the generated HTML microsite artifact
 
 ### Agentic Generation
 
@@ -214,11 +249,35 @@ Each company generation should be handled by an agentic pipeline. For MVP that m
 - gather input company data
 - use approved or latest company research data
 - treat research outputs as the source material for microsite content creation
+- generate a 5-line narrative hook
 - generate microsite content
+- generate a local HTML microsite artifact
 - persist the microsite content and metadata
 - mark that microsite as completed or failed
 
 The implementation does not need full autonomous coding agents today. It needs a practical generation pipeline with clear stages and persisted outputs.
+
+### Observability Requirements
+
+Observability is a product requirement, not a nice-to-have.
+
+The system must capture:
+
+- per-agent duration
+- per-agent cost
+- per-run total duration
+- per-run total token usage
+- per-step status
+- terminal logs during execution
+- persisted run records for later inspection
+- backend API latency
+
+Minimum demo behavior:
+
+- terminal logs clearly show each agent step, duration, and cost
+- a mentor or operator can inspect the run after execution without reading raw application code
+
+The immediate goal is at least `L3` observability on the rubric in `SCORING_MECHANISMS.md`, with clear groundwork for `L4`.
 
 ### Microsite Storage And Retrieval
 
@@ -228,6 +287,7 @@ The system must store:
 - target company
 - research artifact(s)
 - microsite content
+- local microsite file path
 - generation status
 - unique microsite identifier/slug
 
@@ -261,6 +321,7 @@ Minimum entities:
 - `source_url` nullable
 - `summary`
 - `raw_notes_json`
+- `pain_points_json`
 - `status`
 - `created_at`
 - `updated_at`
@@ -275,6 +336,7 @@ Minimum data the microsite flow needs from research:
 - `research_prompt`
 - `summary`
 - `raw_notes_json`
+- `pain_points_json`
 - `status`
 
 Minimum readiness rule:
@@ -288,9 +350,24 @@ Minimum readiness rule:
 - `slug`
 - `title`
 - `content_json` or `content_markdown`
+- `narrative_hook`
+- `local_file_path`
 - `status`
 - `created_at`
 - `updated_at`
+
+### GenerationRun
+
+- `id`
+- `company_target_id`
+- `status`
+- `started_at`
+- `completed_at`
+- `total_duration_ms`
+- `total_cost_usd`
+- `total_tokens`
+- `steps_json`
+- `error_message` nullable
 
 ## Generation Flow
 
@@ -302,9 +379,10 @@ Minimum readiness rule:
 6. Microsite flow reads completed research artifacts.
 7. Backend creates generation jobs for each company.
 8. Worker/agent pipeline generates microsites from stored research.
-9. Generated microsites are persisted with unique slugs.
-10. `/microsites` reads all generated microsites.
-11. User opens a unique microsite page.
+9. Worker emits per-agent duration and cost to terminal logs.
+10. Generated microsites are persisted with unique slugs and local HTML file paths.
+11. `/microsites` reads all generated microsites.
+12. User opens a unique microsite page or uses the generated local file path.
 
 ## API Expectations
 
@@ -322,6 +400,9 @@ Minimum backend endpoints:
 - `GET /api/microsites`
 - `GET /api/microsites/{micrositeId}`
 - `GET /api/microsites/by-slug/{slug}`
+- `GET /api/observability/runs`
+- `GET /api/observability/runs/{runId}`
+- `GET /api/observability/requests`
 
 ## Non-Functional Requirements
 
@@ -333,6 +414,8 @@ Minimum backend endpoints:
 - The UI should show partial progress as microsites complete.
 - The UI should show partial progress as research completes.
 - Local development should work with the current Next.js frontend and FastAPI backend setup.
+- Per-agent cost and duration must be visible in terminal output during generation.
+- Observability data must be persisted so runs can be inspected after completion.
 
 ## Success Criteria
 
@@ -344,6 +427,8 @@ Minimum backend endpoints:
 - Clicking `Generate` creates microsites for all valid companies in the batch.
 - `/microsites` lists generated microsites.
 - Each microsite opens on its own unique route.
+- A demo run can produce research JSON, pain points, a 5-line hook, and a local HTML file path for a prospect.
+- Terminal logs show per-agent duration and cost.
 
 ## Recommended Tools And Infra
 
@@ -358,6 +443,8 @@ Minimum backend endpoints:
 - Queue/cache: Redis
 - Agentic research/generation: Tavily for web research plus an LLM provider for content generation
 - Object/file storage: local disk for dev, S3/R2 in hosted environments if uploaded files need persistence
+- Orchestration and run structure: LangGraph
+- Hosted trace/debug path: LangSmith
 
 ### Recommended Practical Infra
 
@@ -366,6 +453,7 @@ Minimum backend endpoints:
 - Managed Postgres: Neon
 - Redis: Upstash or Railway Redis
 - File storage: Cloudflare R2 or S3 if uploads must be stored beyond request lifecycle
+- Hosted trace inspection: LangSmith
 
 ### Recommendation For Today
 
@@ -384,7 +472,8 @@ For the fastest useful version:
 2. Manual company list entry on the create page.
 3. Excel upload and parsing.
 4. Research page and batch research endpoints.
-5. Batch generate endpoint with mocked generation.
-6. `/microsites` listing page.
-7. Unique microsite detail route.
-8. Real agentic research/generation pipeline.
+5. Agentic generation pipeline that outputs research JSON, pain points, hook, and HTML artifact.
+6. Observability logging for per-agent cost and duration.
+7. `/microsites` listing page.
+8. Unique microsite detail route.
+9. Rich observability page and filtering.
