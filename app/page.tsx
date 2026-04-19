@@ -37,6 +37,12 @@ type ProspectState = {
   slug: string;
 };
 
+type CompanyProfile = {
+  id: string;
+  name: string;
+  summary: string;
+};
+
 const STEP_LABELS: Record<string, string> = {
   manager_plan: "Planning",
   seller_research: "Researching seller",
@@ -58,12 +64,14 @@ const AGENT_LABELS: Record<string, string> = {
 };
 
 export default function Home() {
-  const [sourceCompany, setSourceCompany] = useState("Razorpay");
+  const [companyProfiles, setCompanyProfiles] = useState<CompanyProfile[]>([]);
+  const [sourceCompanyId, setSourceCompanyId] = useState("razorpay");
   const [prospectInput, setProspectInput] = useState("Zepto\nSwiggy\nCRED");
   const [prospects, setProspects] = useState<ProspectState[]>([]);
   const [running, setRunning] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [companyProfilesError, setCompanyProfilesError] = useState("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const abortRef = useRef(false);
 
@@ -78,9 +86,37 @@ export default function Home() {
   const totalDuration = prospects.reduce((s, p) => s + (p.run?.total_duration_ms ?? 0), 0);
 
   const selected = prospects.find((p) => p.name === selectedProspect) ?? null;
+  const selectedSourceCompany = companyProfiles.find((profile) => profile.id === sourceCompanyId) ?? null;
+
+  useEffect(() => {
+    async function loadCompanyProfiles() {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/company-profiles`);
+        if (!response.ok) {
+          throw new Error(`Unable to load company profiles: ${response.status}`);
+        }
+
+        const data: CompanyProfile[] = await response.json();
+        setCompanyProfiles(data);
+        setSourceCompanyId((currentId) => {
+          if (data.some((profile) => profile.id === currentId)) {
+            return currentId;
+          }
+
+          return data.find((profile) => profile.id === "razorpay")?.id ?? data[0]?.id ?? "";
+        });
+      } catch (caughtError) {
+        setCompanyProfilesError(caughtError instanceof Error ? caughtError.message : "Unable to load company profiles");
+      }
+    }
+
+    void loadCompanyProfiles();
+  }, []);
 
   async function runBatch() {
-    if (prospectNames.length === 0 || !sourceCompany.trim()) return;
+    if (prospectNames.length === 0 || !selectedSourceCompany) return;
+
+    const sourceCompanyName = selectedSourceCompany.name;
 
     setRunning(true);
     setError("");
@@ -110,7 +146,7 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             prospect: prospect.name,
-            source_company: sourceCompany,
+            source_company: sourceCompanyName,
           }),
         });
 
@@ -119,7 +155,7 @@ export default function Home() {
         }
 
         const run: CouncilRun = await response.json();
-        const slug = `${sourceCompany.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-x-${prospect.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${run.run_id.slice(0, 6)}`;
+        const slug = `${sourceCompanyName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-x-${prospect.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${run.run_id.slice(0, 6)}`;
 
         setProspects((prev) =>
           prev.map((p, idx) =>
@@ -175,13 +211,19 @@ export default function Home() {
               <div className="fieldTop">
                 <strong>Your company (seller)</strong>
               </div>
-              <input
-                className="demoInput"
-                value={sourceCompany}
-                onChange={(e) => setSourceCompany(e.target.value)}
-                placeholder="Razorpay"
-                disabled={running}
-              />
+              <select
+                className="companySelect"
+                value={sourceCompanyId}
+                onChange={(e) => setSourceCompanyId(e.target.value)}
+                disabled={running || companyProfiles.length === 0}
+              >
+                {companyProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name}
+                  </option>
+                ))}
+              </select>
+              {selectedSourceCompany ? <span className="fieldHint">{selectedSourceCompany.summary}</span> : null}
             </label>
 
             <label className="fieldStack">
@@ -201,7 +243,7 @@ export default function Home() {
             <button
               className="buttonPrimary demoButton"
               type="button"
-              disabled={running || prospectNames.length === 0 || !sourceCompany.trim()}
+              disabled={running || prospectNames.length === 0 || !selectedSourceCompany}
               onClick={runBatch}
             >
               {running ? `Generating ${completedCount + failedCount + 1} of ${prospects.length}...` : `Generate ${prospectNames.length} microsites`}
@@ -209,6 +251,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {companyProfilesError ? <p className="errorText">{companyProfilesError}</p> : null}
 
       {prospects.length > 0 ? (
         <section className="demoProgress">
@@ -243,7 +287,7 @@ export default function Home() {
                 disabled={!p.run}
               >
                 <div className="demoProspectTop">
-                  <strong>{sourceCompany} x {p.name}</strong>
+                    <strong>{selectedSourceCompany?.name ?? "Seller"} x {p.name}</strong>
                   <span className={`statusChip ${p.status === "completed" ? "statusReady" : p.status === "failed" ? "statusError" : p.status === "running" ? "statusPending" : ""}`}>
                     {p.status === "running" ? (STEP_LABELS[p.currentStep] || "Running...") : p.status}
                   </span>
@@ -276,7 +320,7 @@ export default function Home() {
         <section className="demoPreview">
           <div className="previewHeader">
             <div>
-              <p className="kicker">{sourceCompany} x {selected.name}</p>
+              <p className="kicker">{selectedSourceCompany?.name ?? "Seller"} x {selected.name}</p>
               <h2 className="sectionTitle">Generated microsite</h2>
             </div>
             <div className="navCluster">
@@ -290,7 +334,7 @@ export default function Home() {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = `${sourceCompany.toLowerCase()}-x-${selected.name.toLowerCase()}.html`;
+                a.download = `${(selectedSourceCompany?.name ?? "seller").toLowerCase()}-x-${selected.name.toLowerCase()}.html`;
                 a.click();
                 URL.revokeObjectURL(url);
               }}>
@@ -310,7 +354,7 @@ export default function Home() {
               className="sandboxIframe"
               srcDoc={selected.run.final_html}
               sandbox="allow-scripts allow-same-origin"
-              title={`${sourceCompany} x ${selected.name}`}
+              title={`${selectedSourceCompany?.name ?? "Seller"} x ${selected.name}`}
             />
           </div>
 
