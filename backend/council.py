@@ -1668,7 +1668,16 @@ def run_council(
         logger.exception("Council graph invocation failed")
         final_state = {**initial_state, "error": str(exc)}
 
-    steps = [AgentStepResult.model_validate(s) for s in final_state.get("steps", [])]
+    # Deduplicate steps accumulated by _merge_lists reducer at parallel join points
+    raw_steps = final_state.get("steps", [])
+    seen: set[str] = set()
+    unique_steps: list[dict[str, Any]] = []
+    for s in raw_steps:
+        key = f"{s.get('step_name', '')}|{s.get('started_at', '')}"
+        if key not in seen:
+            seen.add(key)
+            unique_steps.append(s)
+    steps = [AgentStepResult.model_validate(s) for s in unique_steps]
     total_cost = sum(s.cost_usd or 0 for s in steps)
     html = final_state.get("final_html", "") or ""
     content = final_state.get("microsite_content")
