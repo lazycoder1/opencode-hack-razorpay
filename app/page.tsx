@@ -40,8 +40,12 @@ type ProspectState = {
 const STEP_LABELS: Record<string, string> = {
   manager_plan: "Planning",
   seller_research: "Researching seller",
+  seller_research_base: "Researching seller",
+  seller_research_mcp: "Enmovil KB lookup",
   prospect_research: "Researching prospect",
+  prospect_seller_fit: "Mapping pain to wedges",
   manager_review: "Reviewing research",
+  narrative_brief: "Editing narrative",
   generate_microsite: "Generating microsite",
 };
 
@@ -49,6 +53,7 @@ const AGENT_LABELS: Record<string, string> = {
   manager: "Manager",
   seller_researcher: "Seller Researcher",
   prospect_researcher: "Prospect Researcher",
+  fit_analyst: "Fit Analyst",
   generator: "Generator",
 };
 

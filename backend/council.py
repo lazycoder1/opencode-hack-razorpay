@@ -338,7 +338,7 @@ DEFAULT_PROMPTS: dict[str, dict[str, str]] = {
         ),
     },
     "seller_research": {
-        "system": _skill_or_inline("prospect-researcher",  # reuse grounding discipline; user prompt steers to seller
+        "system": _skill_or_inline("seller-researcher",
             "You are the Seller Research Agent. Use ONLY the provided context to emit a grounded brief."
         ),
         "user": (
@@ -368,6 +368,21 @@ DEFAULT_PROMPTS: dict[str, dict[str, str]] = {
             "Drop any claim you cannot cite — do not paper over with generalities."
         ),
     },
+    "prospect_seller_fit": {
+        "system": _skill_or_inline("prospect-seller-fit",
+            "You are the Fit Analyst. Given grounded prospect research and seller research, "
+            "emit a SellerFitBrief that maps prospect pains to seller wedges. No new facts."
+        ),
+        "user": (
+            "Seller: {{source_company}} (slug: {{seller_slug}})\n"
+            "Prospect: {{prospect}} (slug: {{prospect_slug}})\n\n"
+            "Match prospect pains to seller wedges. Every claim must trace back to one of the two research blobs below. "
+            "Do not invent facts. If no wedge fits a pain, put it in non_addressable_pains.\n\n"
+            "----- SELLER RESEARCH -----\n{{seller_research}}\n\n"
+            "----- PROSPECT RESEARCH -----\n{{prospect_research}}\n\n"
+            "Pick ONE recommended_angle (verbatim from a seller wedge). Cap fit_score honestly."
+        ),
+    },
     "manager_review": {
         "system": _skill_or_inline("narrative-synthesizer",
             "You are the Manager agent reviewing research from your specialist agents. "
@@ -379,9 +394,11 @@ DEFAULT_PROMPTS: dict[str, dict[str, str]] = {
             "Prospect: {{prospect}}\n"
             "Iteration: {{iteration_count}} (ceiling: {{max_iterations}})\n\n"
             "Original plan:\n{{generation_plan}}\n\n"
-            "Seller research:\n{{seller_research}}\n\n"
-            "Prospect research:\n{{prospect_research}}\n\n"
-            "Write a concise editorial review. Note specific strengths and gaps. "
+            "Fit brief (primary — pain/angle already mapped):\n{{prospect_seller_fit_json}}\n\n"
+            "Seller research (tone/proof context):\n{{seller_research}}\n\n"
+            "Prospect research (read-only context; do not re-derive fit):\n{{prospect_research}}\n\n"
+            "Write a concise editorial review. Anchor on the fit brief — its addressable_pains, recommended_angle, and fit_score are your inputs, not raw pains. "
+            "Note specific strengths and gaps. "
             "End with EXACTLY one line: 'VERDICT: APPROVED' or 'VERDICT: NEEDS_MORE_RESEARCH'. "
             "If iteration_count has reached the ceiling, you MUST emit APPROVED."
         ),
@@ -440,6 +457,52 @@ class _CaseStudy(BaseModel):
     outcome: str
     metric: str | None = None
     source_ref: str | None = None
+
+
+class _AddressablePain(BaseModel):
+    pain_text: str
+    pain_source_url: str | None = None
+    matched_wedge: str
+    why: str
+    confidence: str = "medium"  # high | medium | low
+
+
+class _NonAddressablePain(BaseModel):
+    pain_text: str
+    reason: str
+
+
+class _FitTrigger(BaseModel):
+    headline: str
+    url: str | None = None
+    date: str | None = None
+    why_it_matters_to_seller: str
+
+
+class _ICPMatch(BaseModel):
+    inside_icp: bool = False
+    matched_signals: list[str] = Field(default_factory=list)
+    notes: str | None = None
+
+
+class _RecommendedAngle(BaseModel):
+    wedge: str
+    why_this_wedge: str
+    supporting_pain_refs: list[str] = Field(default_factory=list)
+    supporting_trigger_refs: list[str] = Field(default_factory=list)
+
+
+class SellerFitBrief(BaseModel):
+    prospect_slug: str = ""
+    seller_slug: str = ""
+    addressable_pains: list[_AddressablePain] = Field(default_factory=list)
+    non_addressable_pains: list[_NonAddressablePain] = Field(default_factory=list)
+    strongest_triggers_for_seller: list[_FitTrigger] = Field(default_factory=list)
+    icp_match: _ICPMatch = Field(default_factory=_ICPMatch)
+    mismatch_flags: list[str] = Field(default_factory=list)
+    recommended_angle: _RecommendedAngle | None = None
+    fit_hypothesis: str = ""
+    fit_score: float = 0.0
 
 
 class NarrativeBrief(BaseModel):
@@ -516,6 +579,7 @@ class CouncilRunResult(BaseModel):
     review_notes: str
     final_html: str
     # New structured artifacts (optional for backward compatibility)
+    prospect_seller_fit: dict[str, Any] | None = None
     narrative_brief: dict[str, Any] | None = None
     microsite_content: dict[str, Any] | None = None
     iterations: int = 1
@@ -572,6 +636,7 @@ class CouncilState(TypedDict, total=False):
     final_html: str
 
     # Structured artifacts
+    prospect_seller_fit: dict[str, Any]
     narrative_brief: dict[str, Any]
     microsite_content: dict[str, Any]
 
@@ -617,6 +682,7 @@ def _render(template: str, state: CouncilState) -> str:
         .replace("{{seller_brand}}", state.get("seller_brand", ""))
         .replace("{{seller_skills}}", state.get("seller_skills", ""))
         .replace("{{narrative_brief_json}}", _json.dumps(state.get("narrative_brief") or {}, indent=2))
+        .replace("{{prospect_seller_fit_json}}", _json.dumps(state.get("prospect_seller_fit") or {}, indent=2))
     )
 
 
@@ -990,6 +1056,68 @@ def seller_research_node(state: CouncilState) -> CouncilState:
 
 
 # ---------------------------------------------------------------------------
+# Node: prospect ↔ seller fit analysis → structured SellerFitBrief
+# ---------------------------------------------------------------------------
+
+def prospect_seller_fit_node(state: CouncilState) -> CouncilState:
+    started_at = utc_now_iso()
+    start_perf = time.perf_counter()
+    stage = "prospect_seller_fit"
+
+    system = _render(_get_prompt(state, stage, "system"), state)
+    user = _render(_get_prompt(state, stage, "user"), state)
+
+    try:
+        brief, model, usage, duration_ms, cost = _invoke_structured(
+            system, user, SellerFitBrief, temperature=0.3
+        )
+        step = AgentStepResult(
+            step_name=stage,
+            agent_role="fit_analyst",
+            status="completed",
+            started_at=started_at,
+            duration_ms=duration_ms,
+            output=(brief.fit_hypothesis or "")[:500],
+            model_name=model,
+            input_tokens=usage.get("input_tokens"),
+            output_tokens=usage.get("output_tokens"),
+            total_tokens=usage.get("total_tokens"),
+            cost_usd=cost,
+            metadata={
+                "fit_score": brief.fit_score,
+                "addressable_pains": len(brief.addressable_pains),
+                "non_addressable_pains": len(brief.non_addressable_pains),
+                "mismatch_flags": len(brief.mismatch_flags),
+                "has_recommended_angle": brief.recommended_angle is not None,
+            },
+        )
+        return {
+            "prospect_seller_fit": brief.model_dump(),
+            "steps": [*state.get("steps", []), step.model_dump()],
+        }
+    except Exception as exc:
+        logger.exception("prospect_seller_fit synthesis failed; emitting empty brief")
+        step = AgentStepResult(
+            step_name=stage,
+            agent_role="fit_analyst",
+            status="failed",
+            started_at=started_at,
+            duration_ms=round((time.perf_counter() - start_perf) * 1000, 2),
+            output=f"fit brief failed: {exc}",
+            metadata={"error": str(exc)},
+        )
+        return {
+            "prospect_seller_fit": SellerFitBrief(
+                prospect_slug=state.get("prospect_slug", ""),
+                seller_slug=state.get("seller_slug", ""),
+                mismatch_flags=[f"fit_analyst failed: {exc}"],
+            ).model_dump(),
+            "steps": [*state.get("steps", []), step.model_dump()],
+            "error": str(exc),
+        }
+
+
+# ---------------------------------------------------------------------------
 # Node: manager review → structured NarrativeBrief + loop-back decision
 # ---------------------------------------------------------------------------
 
@@ -1016,12 +1144,16 @@ def manager_review_node(state: CouncilState) -> CouncilState:
         "Return a NarrativeBrief. If iteration has reached the ceiling, you MUST set verdict='PROCEED' "
         "and record gaps in 'caveats' instead of requesting more research.\n\n"
         f"----- FREE-TEXT REVIEW (phase 1) -----\n{review_text}\n\n"
-        f"----- SELLER RESEARCH -----\n{state.get('seller_research', '')}\n\n"
-        f"----- PROSPECT RESEARCH -----\n{state.get('prospect_research', '')}\n\n"
+        f"----- FIT BRIEF (primary — pain/angle already mapped) -----\n{_json.dumps(state.get('prospect_seller_fit') or {}, indent=2)}\n\n"
+        f"----- SELLER RESEARCH (tone/proof context) -----\n{state.get('seller_research', '')}\n\n"
+        f"----- PROSPECT RESEARCH (read-only; do not re-derive fit) -----\n{state.get('prospect_research', '')}\n\n"
         "Rules:\n"
-        "- 'hook' must be EXACTLY 5 short lines, each ≤14 words. Line 1 names a specific prospect signal.\n"
+        "- Anchor the brief on the fit brief's addressable_pains and recommended_angle. Do not smuggle raw prospect pains the fit_analyst excluded.\n"
+        "- 'hook' must be EXACTLY 5 short lines, each ≤14 words. Line 1 names a specific prospect signal from the fit brief.\n"
+        "- 'seller_fit' leads with recommended_angle.wedge verbatim.\n"
         "- 'relevant_case_studies' — cite from seller_research only. Never invent customers.\n"
         "- 'cta' is one line, ≤10 words, specific.\n"
+        "- If fit_score < 0.3 and iteration is below ceiling, set verdict='NEEDS_MORE_RESEARCH' with targeted followups.\n"
         "- 'followups' is empty when verdict is PROCEED; when NEEDS_MORE_RESEARCH, list 2-4 raw Tavily query strings.\n"
     )
 
@@ -1214,14 +1346,16 @@ def build_council_graph() -> Any:
     graph.add_node("manager_plan", manager_plan_node)
     graph.add_node("seller_research", seller_research_node)
     graph.add_node("prospect_research", prospect_research_node)
+    graph.add_node("prospect_seller_fit", prospect_seller_fit_node)
     graph.add_node("manager_review", manager_review_node)
     graph.add_node("generate_microsite", generate_microsite_node)
 
     graph.add_edge(START, "manager_plan")
     graph.add_edge("manager_plan", "seller_research")
     graph.add_edge("manager_plan", "prospect_research")
-    graph.add_edge("seller_research", "manager_review")
-    graph.add_edge("prospect_research", "manager_review")
+    graph.add_edge("seller_research", "prospect_seller_fit")
+    graph.add_edge("prospect_research", "prospect_seller_fit")
+    graph.add_edge("prospect_seller_fit", "manager_review")
 
     # Dynamic loop-back: manager_review → seller_research (fan-out will replay both researchers)
     graph.add_conditional_edges(
@@ -1273,6 +1407,7 @@ def run_single_stage(
         "manager_plan": manager_plan_node,
         "seller_research": seller_research_node,
         "prospect_research": prospect_research_node,
+        "prospect_seller_fit": prospect_seller_fit_node,
         "manager_review": manager_review_node,
         "generate_microsite": generate_microsite_node,
     }
@@ -1369,6 +1504,7 @@ def run_council(
         generation_plan=final_state.get("generation_plan", "") or "",
         review_notes=final_state.get("review_notes", "") or "",
         final_html=html,
+        prospect_seller_fit=final_state.get("prospect_seller_fit"),
         narrative_brief=final_state.get("narrative_brief"),
         microsite_content=content,
         iterations=(final_state.get("iteration_count", 0) or 0) + 1,
