@@ -1310,6 +1310,33 @@ button {
   line-height: 1.55;
 }
 
+.sandboxInputRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.sandboxField {
+  display: grid;
+  gap: 8px;
+}
+
+.sandboxInput {
+  min-height: unset;
+  padding: 14px 16px;
+}
+
+.sandboxActions {
+  margin-top: 16px;
+}
+
+.sandboxTrace {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
 .sandboxLoading {
   display: flex;
   align-items: center;

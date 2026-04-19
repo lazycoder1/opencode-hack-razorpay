@@ -21,6 +21,8 @@ from langchain_openai import ChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
+import psycopg
+from psycopg.types.json import Jsonb
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -325,6 +327,104 @@ app.add_middleware(
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+@lru_cache(maxsize=1)
+def get_database_url() -> str:
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if not database_url:
+        raise RuntimeError("DATABASE_URL is not configured")
+    return database_url
+
+
+def get_db_connection() -> psycopg.Connection:
+    return psycopg.connect(get_database_url(), autocommit=True)
+
+
+def parse_iso_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value)
+
+
+def normalize_payload(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        return json.loads(value)
+    raise TypeError(f"Unsupported payload type: {type(value)!r}")
+
+
+def ensure_database_tables() -> None:
+    with get_db_connection() as connection, connection.cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS prompt_library (
+                id TEXT PRIMARY KEY,
+                slug TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                is_active BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL,
+                payload JSONB NOT NULL
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS microsites (
+                id TEXT PRIMARY KEY,
+                slug TEXT NOT NULL UNIQUE,
+                company_name TEXT NOT NULL,
+                generated_at TIMESTAMPTZ NOT NULL,
+                payload JSONB NOT NULL
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS generation_runs (
+                id TEXT PRIMARY KEY,
+                company_name TEXT NOT NULL,
+                status TEXT NOT NULL,
+                started_at TIMESTAMPTZ NOT NULL,
+                microsite_slug TEXT,
+                payload JSONB NOT NULL
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS api_request_events (
+                id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                method TEXT NOT NULL,
+                status_code INTEGER NOT NULL,
+                occurred_at TIMESTAMPTZ NOT NULL,
+                payload JSONB NOT NULL
+            )
+            """
+        )
+
+
+def table_has_rows(table_name: str) -> bool:
+    with get_db_connection() as connection, connection.cursor() as cursor:
+        cursor.execute(f"SELECT EXISTS (SELECT 1 FROM {table_name} LIMIT 1)")
+        row = cursor.fetchone()
+    return bool(row and row[0])
+
+
+def trim_table(table_name: str, order_column: str, limit: int) -> None:
+    with get_db_connection() as connection, connection.cursor() as cursor:
+        cursor.execute(
+            f"""
+            DELETE FROM {table_name}
+            WHERE id IN (
+                SELECT id FROM {table_name}
+                ORDER BY {order_column} DESC
+                OFFSET %s
+            )
+            """,
+            (limit,),
+        )
 
 
 def ensure_storage() -> None:
@@ -1175,49 +1275,173 @@ def get_generation_run(run_id: str) -> GenerationRunRecord:
     raise HTTPException(status_code=404, detail=f"Run '{run_id}' was not found")
 
 
-class SandboxGenerateRequest(BaseModel):
-    system_prompt: str = Field(description="The skill/system instructions for the LLM")
-    user_prompt: str = Field(description="The user prompt that asks the LLM to generate the HTML microsite")
-    model: str | None = None
-
-
-class SandboxGenerateResponse(BaseModel):
-    html: str
-    model_name: str
+class SandboxStepResult(BaseModel):
+    step_name: str
+    status: str
+    started_at: str
+    duration_ms: float
+    output: str
+    model_name: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
     total_tokens: int | None = None
-    duration_ms: float
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-@app.post("/api/sandbox/generate", response_model=SandboxGenerateResponse)
-def sandbox_generate(request: SandboxGenerateRequest) -> SandboxGenerateResponse:
+class SandboxRunRecord(BaseModel):
+    run_id: str
+    prospect: str
+    source_company: str
+    status: str
+    started_at: str
+    completed_at: str
+    total_duration_ms: float
+    steps: list[SandboxStepResult]
+    final_html: str
+
+
+class SandboxPromptRequest(BaseModel):
+    system_prompt: str = Field(description="Skill/system instructions for the LLM")
+    user_prompt: str = Field(description="User message template. Use {{company_name}} as placeholder.")
+    prospect: str = Field(description="Prospect company name, e.g. Zepto")
+    source_company: str = Field(default="", description="Source company name for context, e.g. Razorpay")
+    model: str | None = None
+
+
+class SandboxStepRequest(BaseModel):
+    system_prompt: str
+    user_prompt: str
+    model: str | None = None
+
+
+@app.post("/api/sandbox/step/render-prompt", response_model=SandboxStepResult)
+def sandbox_render_prompt(request: SandboxPromptRequest) -> SandboxStepResult:
+    started_at = utc_now_iso()
+    start_perf = time.perf_counter()
+    rendered = request.user_prompt.replace("{{company_name}}", request.prospect)
+    rendered = rendered.replace("{{source_company}}", request.source_company)
+    return SandboxStepResult(
+        step_name="render_prompt",
+        status="completed",
+        started_at=started_at,
+        duration_ms=round((time.perf_counter() - start_perf) * 1000, 2),
+        output=rendered,
+        metadata={
+            "prospect": request.prospect,
+            "source_company": request.source_company,
+            "system_prompt_length": len(request.system_prompt),
+            "user_prompt_length": len(rendered),
+        },
+    )
+
+
+@app.post("/api/sandbox/step/generate", response_model=SandboxStepResult)
+def sandbox_step_generate(request: SandboxStepRequest) -> SandboxStepResult:
+    started_at = utc_now_iso()
+    start_perf = time.perf_counter()
     model_name = request.model or get_openai_model_name()
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured")
 
-    llm = ChatOpenAI(model=model_name, api_key=api_key, temperature=0.9)
-    start_perf = time.perf_counter()
+    try:
+        llm = ChatOpenAI(model=model_name, api_key=api_key, temperature=0.9)
+        result = llm.invoke([
+            {"role": "system", "content": request.system_prompt},
+            {"role": "user", "content": request.user_prompt},
+        ])
+        duration_ms = round((time.perf_counter() - start_perf) * 1000, 2)
+        usage = normalize_usage(result)
+        actual_model = getattr(result, "response_metadata", {}).get("model_name", model_name)
+        raw_html = stringify_message_content(result.content)
 
-    result = llm.invoke([
-        {"role": "system", "content": request.system_prompt},
-        {"role": "user", "content": request.user_prompt},
-    ])
+        return SandboxStepResult(
+            step_name="generate_html",
+            status="completed",
+            started_at=started_at,
+            duration_ms=duration_ms,
+            output=raw_html,
+            model_name=actual_model,
+            input_tokens=usage.get("input_tokens"),
+            output_tokens=usage.get("output_tokens"),
+            total_tokens=usage.get("total_tokens"),
+            metadata={"model_requested": model_name, "model_used": actual_model},
+        )
+    except Exception as exc:
+        return SandboxStepResult(
+            step_name="generate_html",
+            status="failed",
+            started_at=started_at,
+            duration_ms=round((time.perf_counter() - start_perf) * 1000, 2),
+            output="",
+            model_name=model_name,
+            metadata={"error": str(exc)},
+        )
 
-    duration_ms = round((time.perf_counter() - start_perf) * 1000, 2)
-    usage = normalize_usage(result)
-    actual_model = getattr(result, "response_metadata", {}).get("model_name", model_name)
-    raw_html = stringify_message_content(result.content)
 
-    return SandboxGenerateResponse(
-        html=raw_html,
-        model_name=actual_model,
-        input_tokens=usage.get("input_tokens"),
-        output_tokens=usage.get("output_tokens"),
-        total_tokens=usage.get("total_tokens"),
-        duration_ms=duration_ms,
+SANDBOX_RUNS_PATH = DATA_DIR / "sandbox_runs.json"
+
+
+def load_sandbox_runs() -> list[dict[str, Any]]:
+    if not SANDBOX_RUNS_PATH.exists():
+        return []
+    return load_json_list(SANDBOX_RUNS_PATH)
+
+
+def save_sandbox_run(record: SandboxRunRecord) -> None:
+    runs = load_sandbox_runs()
+    runs = [record.model_dump(), *runs]
+    save_json_list(SANDBOX_RUNS_PATH, runs[:100])
+
+
+@app.post("/api/sandbox/run", response_model=SandboxRunRecord)
+def sandbox_full_run(request: SandboxPromptRequest) -> SandboxRunRecord:
+    run_id = uuid4().hex
+    run_started_at = utc_now_iso()
+    run_start_perf = time.perf_counter()
+    steps: list[SandboxStepResult] = []
+
+    prompt_result = sandbox_render_prompt(request)
+    steps.append(prompt_result)
+    rendered_prompt = prompt_result.output
+
+    gen_request = SandboxStepRequest(
+        system_prompt=request.system_prompt,
+        user_prompt=rendered_prompt,
+        model=request.model,
     )
+    gen_result = sandbox_step_generate(gen_request)
+    steps.append(gen_result)
+
+    html = gen_result.output
+    if "```html" in html:
+        html = html.replace("```html\n", "").replace("```\n", "").replace("```", "")
+    html = html.strip()
+
+    status = "completed" if gen_result.status == "completed" and html else "failed"
+    record = SandboxRunRecord(
+        run_id=run_id,
+        prospect=request.prospect,
+        source_company=request.source_company,
+        status=status,
+        started_at=run_started_at,
+        completed_at=utc_now_iso(),
+        total_duration_ms=round((time.perf_counter() - run_start_perf) * 1000, 2),
+        steps=steps,
+        final_html=html,
+    )
+    save_sandbox_run(record)
+    return record
+
+
+@app.get("/api/sandbox/runs")
+def list_sandbox_runs() -> list[dict[str, Any]]:
+    return load_sandbox_runs()
+
+
+@app.post("/api/sandbox/generate", response_model=SandboxStepResult)
+def sandbox_generate_compat(request: SandboxStepRequest) -> SandboxStepResult:
+    return sandbox_step_generate(request)
 
 
 @app.get("/api/observability/requests", response_model=list[ApiRequestEvent])
