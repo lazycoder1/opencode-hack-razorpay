@@ -52,6 +52,16 @@ type LangSmithRunSummary = {
   end_time: string | null;
   trace_id: string | null;
   url: string | null;
+  error_message: string | null;
+  failed_steps: LangSmithFailureSummary[];
+};
+
+type LangSmithFailureSummary = {
+  id: string;
+  name: string | null;
+  run_type: string | null;
+  error_message: string;
+  parent_run_id: string | null;
 };
 
 type LangSmithStatus = {
@@ -337,17 +347,31 @@ export default function ObservabilityPage() {
                       ) : null}
                     </div>
 
-                    <div className="requestList">
-                      {langsmith.recent_runs.map((run) => (
-                        <article className="requestItem" key={run.id}>
-                          <div className="requestInfo">
-                            <p className="miniLabel">{run.run_type ?? "trace"}</p>
-                            <strong>{run.name ?? run.id}</strong>
-                            <p>{run.start_time ? new Date(run.start_time).toLocaleString() : "Unknown time"}</p>
-                          </div>
-                          <div className="requestMeta">
-                            <span>{run.status ?? "unknown"}</span>
-                            {run.url ? (
+                     <div className="requestList">
+                       {langsmith.recent_runs.map((run) => (
+                         <article className="requestItem" key={run.id}>
+                           <div className="requestInfo">
+                             <p className="miniLabel">{run.run_type ?? "trace"}</p>
+                             <strong>{run.name ?? run.id}</strong>
+                             <p>{run.start_time ? new Date(run.start_time).toLocaleString() : "Unknown time"}</p>
+                             {run.error_message ? <p className="errorText">{run.error_message}</p> : null}
+                             {run.failed_steps.length > 0 ? (
+                               <div className="stepList compactStepList">
+                                 {run.failed_steps.map((step) => (
+                                   <article className="stepItem" key={step.id}>
+                                     <div className="stepHead">
+                                       <strong>{step.name ?? step.id}</strong>
+                                       <span>{step.run_type ?? "step"}</span>
+                                     </div>
+                                     <p className="stepStatus">{step.error_message}</p>
+                                   </article>
+                                 ))}
+                               </div>
+                             ) : null}
+                           </div>
+                           <div className="requestMeta">
+                             <span>{run.status ?? "unknown"}</span>
+                             {run.url ? (
                               <a className="textLink" href={run.url} rel="noreferrer" target="_blank">
                                 Open
                               </a>
