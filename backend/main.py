@@ -108,6 +108,19 @@ class MicrositeSection(BaseModel):
     body: str
 
 
+class BrandFonts(BaseModel):
+    heading: str
+    body: str
+    google_url: str
+
+
+class BrandKit(BaseModel):
+    fonts: BrandFonts
+    hero_image_path: str | None = None
+    favicon_path: str | None = None
+    wordmark_path: str | None = None
+
+
 class GeneratedMicrositeContent(BaseModel):
     tagline: str
     headline: str
@@ -116,6 +129,7 @@ class GeneratedMicrositeContent(BaseModel):
     visual_direction: str
     stats: list[str] = Field(min_length=3, max_length=3)
     sections: list[MicrositeSection] = Field(min_length=3, max_length=4)
+    narrative_hook: list[str] = Field(default_factory=list)
 
 
 class MicrositeRecord(BaseModel):
@@ -137,6 +151,7 @@ class MicrositeRecord(BaseModel):
     theme: MicrositeTheme
     stats: list[str]
     sections: list[MicrositeSection]
+    narrative_hook: list[str] = Field(default_factory=list)
 
 
 class GenerateMicrositesResponse(BaseModel):
@@ -311,6 +326,16 @@ COMPANY_PROFILE_CONFIG = {
             "accent_soft": "#DCE8FF",
             "text": "#13203D",
             "muted": "#5A6B8F",
+        },
+        "brand": {
+            "fonts": {
+                "heading": "Inter Tight",
+                "body": "Inter",
+                "google_url": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap",
+            },
+            "hero_image_path": None,
+            "favicon_path": "/company-assets/razorpay-mark.svg",
+            "wordmark_path": "/company-assets/razorpay-mark.svg",
         },
     },
 }
@@ -1651,11 +1676,18 @@ def list_microsites() -> list[MicrositeRecord]:
     return load_microsites()
 
 
-@app.get("/api/microsites/by-slug/{slug}", response_model=MicrositeRecord)
-def get_microsite_by_slug(slug: str) -> MicrositeRecord:
+class MicrositeWithBrand(MicrositeRecord):
+    brand: BrandKit | None = None
+
+
+@app.get("/api/microsites/by-slug/{slug}", response_model=MicrositeWithBrand)
+def get_microsite_by_slug(slug: str) -> MicrositeWithBrand:
     for record in load_microsites():
         if record.slug == slug:
-            return record
+            profile = COMPANY_PROFILE_CONFIG.get(record.source_company_id or "")
+            brand_dict = profile.get("brand") if profile else None
+            brand = BrandKit(**brand_dict) if brand_dict else None
+            return MicrositeWithBrand(**record.model_dump(), brand=brand)
     raise HTTPException(status_code=404, detail=f"Microsite '{slug}' was not found")
 
 
@@ -1967,9 +1999,12 @@ def council_run(request: CouncilRunRequest) -> CouncilRunResult:
     except Exception:
         logger.exception("Failed to persist council run to Postgres")
 
-    # Also save as a serveable microsite
+    # Persist the microsite in two forms so both render surfaces work:
+    #   A) pgdb.save_microsite  → raw HTML at /m/{slug}       (demo live URL)
+    #   B) save_microsites([MicrositeRecord]) → structured at /microsites/{slug}  (Next.js route)
+    slug = f"{_slugify(result.source_company)}-x-{_slugify(result.prospect)}-{result.run_id[:6]}"
+
     if result.final_html:
-        slug = f"{_slugify(result.source_company)}-x-{_slugify(result.prospect)}-{result.run_id[:6]}"
         try:
             pgdb.save_microsite({
                 "id": result.run_id,
@@ -1985,12 +2020,98 @@ def council_run(request: CouncilRunRequest) -> CouncilRunResult:
                     "total_duration_ms": result.total_duration_ms,
                     "total_cost_usd": result.total_cost_usd,
                     "steps_count": len(result.steps),
+                    "used_mcp": result.used_mcp,
+                    "iterations": result.iterations,
                 },
             })
-            result_dict = result.model_dump()
-            result_dict["microsite_slug"] = slug
         except Exception:
-            logger.exception("Failed to persist microsite to Postgres")
+            logger.exception("Failed to persist raw-HTML microsite to Postgres (/m/{slug})")
+
+    # Structured record: needs a microsite_content payload (best) or synthesized fallback.
+    content_payload = result.microsite_content or {}
+    seller_slug = _slugify(result.source_company)
+    try:
+        seller_profile = get_company_profile(seller_slug)
+        source_company_id = seller_profile.id
+        source_company_name = seller_profile.name
+        source_company_website = seller_profile.website_url
+        source_company_logo_path = seller_profile.logo_path
+        fallback_theme = seller_profile.theme
+    except HTTPException:
+        # Unknown seller — still persist with sensible defaults
+        source_company_id = seller_slug
+        source_company_name = result.source_company
+        source_company_website = ""
+        source_company_logo_path = "/company-assets/enmovil-mark.svg"
+        fallback_theme = MicrositeTheme(
+            background="#f7f2ea", surface="#fffaf4", accent="#d96c4d",
+            accent_soft="#f7d8cf", text="#1f2230", muted="#5f6371",
+        )
+
+    # Build theme from council output if present; else seller profile default
+    theme_dict = content_payload.get("theme") if isinstance(content_payload, dict) else None
+    try:
+        theme = MicrositeTheme.model_validate(theme_dict) if theme_dict else fallback_theme
+    except Exception:
+        theme = fallback_theme
+
+    # Pull structured fields with fallbacks so we always produce a valid record
+    def _pick(field: str, default: Any) -> Any:
+        value = content_payload.get(field) if isinstance(content_payload, dict) else None
+        return value if value else default
+
+    tagline = _pick("tagline", f"{source_company_name} × {result.prospect}")
+    headline = _pick("headline", f"A first-touch brief for {result.prospect}")
+    summary = _pick("summary", result.review_notes[:280] if result.review_notes else f"{source_company_name} × {result.prospect}")
+    cta_label = _pick("cta_label", "Book a walkthrough")
+    visual_direction = _pick("visual_direction", "")
+    stats = _pick("stats", ["", "", ""])
+    if not isinstance(stats, list) or len(stats) != 3:
+        stats = ["Signal", "Fit", "Momentum"]
+    sections_raw = _pick("sections", [])
+    sections: list[MicrositeSection] = []
+    for s in (sections_raw or [])[:4]:
+        try:
+            sections.append(MicrositeSection.model_validate(s))
+        except Exception:
+            continue
+    while len(sections) < 3:
+        sections.append(MicrositeSection(title="Notes", body="Draft — research-ready microsite."))
+    narrative_hook_raw = _pick("narrative_hook", [])
+    narrative_hook = [line for line in narrative_hook_raw if isinstance(line, str)][:5]
+    if not narrative_hook and isinstance(result.narrative_brief, dict):
+        hook = result.narrative_brief.get("hook")
+        if isinstance(hook, list):
+            narrative_hook = [line for line in hook if isinstance(line, str)][:5]
+
+    # Latest model used in steps, for observability
+    model_name = next((s.model_name for s in reversed(result.steps) if s.model_name), None)
+
+    try:
+        record = MicrositeRecord(
+            id=result.run_id,
+            company_name=result.prospect,
+            slug=slug,
+            source_company_id=source_company_id,
+            source_company_name=source_company_name,
+            source_company_website=source_company_website,
+            source_company_logo_path=source_company_logo_path,
+            tagline=tagline,
+            headline=headline,
+            summary=summary,
+            cta_label=cta_label,
+            visual_direction=visual_direction,
+            generated_at=result.completed_at,
+            generation_run_id=result.run_id,
+            model_name=model_name,
+            theme=theme,
+            stats=list(stats),
+            sections=sections[:4],
+            narrative_hook=narrative_hook,
+        )
+        save_microsites([record])
+    except Exception:
+        logger.exception("Failed to persist structured MicrositeRecord (/microsites/{slug})")
 
     return result
 

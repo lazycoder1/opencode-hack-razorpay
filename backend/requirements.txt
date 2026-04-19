@@ -8,3 +8,4 @@ langgraph
 langchain-openai
 langsmith
 psycopg[binary]
+tavily-python

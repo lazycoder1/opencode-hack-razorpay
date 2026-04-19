@@ -3,6 +3,18 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { CSSProperties, useEffect, useMemo, useState } from "react";
+import { BrandFlag } from "../../_components/BrandFlag";
+
+type BrandKit = {
+  fonts: {
+    heading: string;
+    body: string;
+    google_url: string;
+  };
+  hero_image_path: string | null;
+  favicon_path: string | null;
+  wordmark_path: string | null;
+};
 
 type MicrositeRecord = {
   company_name: string;
@@ -31,6 +43,7 @@ type MicrositeRecord = {
     text: string;
     muted: string;
   };
+  brand: BrandKit | null;
 };
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -81,7 +94,7 @@ export default function MicrositeDetailPage() {
       return undefined;
     }
 
-    return {
+    const base: Record<string, string> = {
       "--artifact-bg": microsite.theme.background,
       "--artifact-surface": microsite.theme.surface,
       "--artifact-accent": microsite.theme.accent,
@@ -90,7 +103,46 @@ export default function MicrositeDetailPage() {
       "--artifact-muted": microsite.theme.muted,
       "--artifact-accent-rgb": hexToRgb(microsite.theme.accent),
       "--artifact-soft-rgb": hexToRgb(microsite.theme.accent_soft),
-    } as CSSProperties;
+    };
+
+    if (microsite.brand?.fonts) {
+      base["--brand-font-heading"] = `"${microsite.brand.fonts.heading}", var(--font-inter-tight), var(--font-ui)`;
+      base["--brand-font-body"] = `"${microsite.brand.fonts.body}", var(--font-inter), var(--font-ui)`;
+    }
+
+    return base as CSSProperties;
+  }, [microsite]);
+
+  useEffect(() => {
+    if (!microsite?.brand) return;
+    const { favicon_path, fonts } = microsite.brand;
+
+    const cleanups: Array<() => void> = [];
+
+    if (favicon_path) {
+      const existing = document.querySelector<HTMLLinkElement>('link[data-brand-favicon]');
+      if (existing) existing.remove();
+      const link = document.createElement("link");
+      link.rel = "icon";
+      link.type = favicon_path.endsWith(".svg") ? "image/svg+xml" : "image/png";
+      link.href = favicon_path;
+      link.setAttribute("data-brand-favicon", "true");
+      document.head.appendChild(link);
+      cleanups.push(() => link.remove());
+    }
+
+    if (fonts?.google_url) {
+      const existing = document.querySelector<HTMLLinkElement>('link[data-brand-font]');
+      if (existing) existing.remove();
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = fonts.google_url;
+      link.setAttribute("data-brand-font", "true");
+      document.head.appendChild(link);
+      cleanups.push(() => link.remove());
+    }
+
+    return () => cleanups.forEach((fn) => fn());
   }, [microsite]);
 
   if (error) {
@@ -116,8 +168,34 @@ export default function MicrositeDetailPage() {
     );
   }
 
+  const branded = !!microsite.brand;
+
+  const metaNotes = (
+    <>
+      <article className="artifactNote">
+        <span>Visual direction</span>
+        <strong>Design brief</strong>
+        <p>{microsite.visual_direction || "A clean account-specific sales artifact with a strong first-touch narrative."}</p>
+      </article>
+      <article className="artifactNote">
+        <span>Generated at</span>
+        <strong>{new Date(microsite.generated_at).toLocaleString()}</strong>
+        <p>This microsite is persisted and can be reopened from the main library at any time.</p>
+      </article>
+      <article className="artifactNote">
+        <span>Traceability</span>
+        <strong>{microsite.generation_run_id ? "Run linked" : "No run id"}</strong>
+        <p>
+          {microsite.generation_run_id
+            ? `Observability run ${microsite.generation_run_id}`
+            : "This record does not expose a generation run identifier."}
+        </p>
+      </article>
+    </>
+  );
+
   return (
-    <main className="detailShell" style={themeStyle}>
+    <main className={`detailShell${branded ? " brandedShell" : ""}`} style={themeStyle}>
       <nav className="topbar detailTopbar">
         <div className="brand">
           <img alt={microsite.source_company_name} className="brandLogo" src={microsite.source_company_logo_path} />
@@ -169,28 +247,19 @@ export default function MicrositeDetailPage() {
               </div>
             </div>
 
-            <aside className="artifactSidebar">
-              <article className="artifactNote">
-                <span>Visual direction</span>
-                <strong>Design brief</strong>
-                <p>{microsite.visual_direction || "A clean account-specific sales artifact with a strong first-touch narrative."}</p>
-              </article>
-              <article className="artifactNote">
-                <span>Generated at</span>
-                <strong>{new Date(microsite.generated_at).toLocaleString()}</strong>
-                <p>This microsite is persisted and can be reopened from the main library at any time.</p>
-              </article>
-              <article className="artifactNote">
-                <span>Traceability</span>
-                <strong>{microsite.generation_run_id ? "Run linked" : "No run id"}</strong>
-                <p>
-                  {microsite.generation_run_id
-                    ? `Observability run ${microsite.generation_run_id}`
-                    : "This record does not expose a generation run identifier."}
-                </p>
-              </article>
-            </aside>
+            {branded && microsite.brand ? (
+              <BrandFlag
+                wordmarkSrc={microsite.brand.wordmark_path || microsite.source_company_logo_path}
+                wordmark={microsite.source_company_name}
+                accent={microsite.theme.accent}
+                accentSoft={microsite.theme.accent_soft}
+              />
+            ) : (
+              <aside className="artifactSidebar">{metaNotes}</aside>
+            )}
           </section>
+
+          {branded ? <div className="brandedMetaRow">{metaNotes}</div> : null}
 
           <section className="artifactGrid">
             {microsite.sections.map((section, index) => (
