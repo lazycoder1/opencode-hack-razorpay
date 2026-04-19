@@ -224,6 +224,16 @@ class LangSmithRunSummary(BaseModel):
     end_time: str | None = None
     trace_id: str | None = None
     url: str | None = None
+    error_message: str | None = None
+    failed_steps: list["LangSmithFailureSummary"] = Field(default_factory=list)
+
+
+class LangSmithFailureSummary(BaseModel):
+    id: str
+    name: str | None = None
+    run_type: str | None = None
+    error_message: str
+    parent_run_id: str | None = None
 
 
 class LangSmithStatusResponse(BaseModel):
@@ -896,16 +906,28 @@ def get_langsmith_status() -> LangSmithStatusResponse:
     recent_runs: list[LangSmithRunSummary] = []
     try:
         for run in client.list_runs(project_name=project_name, is_root=True, limit=10):
+            error_message = summarize_langsmith_error(getattr(run, "error", None))
+            failed_steps: list[LangSmithFailureSummary] = []
+
+            if error_message:
+                try:
+                    detailed_run = client.read_run(run.id, load_child_runs=True)
+                    failed_steps = collect_langsmith_failures(detailed_run)
+                except Exception as exc:
+                    logger.warning("Unable to load LangSmith child runs for %s: %s", run.id, exc)
+
             recent_runs.append(
                 LangSmithRunSummary(
                     id=str(run.id),
                     name=getattr(run, "name", None),
                     run_type=getattr(run, "run_type", None),
-                    status="error" if getattr(run, "error", None) else "completed",
+                    status=getattr(run, "status", None) or ("error" if error_message else "completed"),
                     start_time=getattr(run, "start_time", None).isoformat() if getattr(run, "start_time", None) else None,
                     end_time=getattr(run, "end_time", None).isoformat() if getattr(run, "end_time", None) else None,
                     trace_id=str(getattr(run, "trace_id", "")) or None,
                     url=getattr(run, "url", None),
+                    error_message=error_message,
+                    failed_steps=failed_steps,
                 )
             )
     except Exception as exc:
@@ -918,6 +940,53 @@ def get_langsmith_status() -> LangSmithStatusResponse:
         project_url=project_url,
         recent_runs=recent_runs,
     )
+
+
+def summarize_langsmith_error(error: Any, max_length: int = 400) -> str | None:
+    if error is None:
+        return None
+
+    if isinstance(error, str):
+        text = error
+    elif isinstance(error, (dict, list)):
+        text = json.dumps(error, ensure_ascii=True)
+    else:
+        text = str(error)
+
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    if not cleaned:
+        return None
+    if len(cleaned) <= max_length:
+        return cleaned
+    return f"{cleaned[:max_length - 3]}..."
+
+
+def collect_langsmith_failures(root_run: Any, limit: int = 6) -> list[LangSmithFailureSummary]:
+    failures: list[LangSmithFailureSummary] = []
+
+    def visit(run: Any) -> None:
+        if len(failures) >= limit:
+            return
+
+        error_message = summarize_langsmith_error(getattr(run, "error", None))
+        if error_message:
+            failures.append(
+                LangSmithFailureSummary(
+                    id=str(getattr(run, "id", "")),
+                    name=getattr(run, "name", None),
+                    run_type=getattr(run, "run_type", None),
+                    error_message=error_message,
+                    parent_run_id=str(getattr(run, "parent_run_id", "")) or None,
+                )
+            )
+
+        for child_run in getattr(run, "child_runs", None) or []:
+            visit(child_run)
+
+    for child_run in getattr(root_run, "child_runs", None) or []:
+        visit(child_run)
+
+    return failures
 
 
 def normalize_prompt_stage(stage: str) -> str:
