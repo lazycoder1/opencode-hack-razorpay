@@ -125,7 +125,12 @@ MIGRATIONS_SQL = [
     "ALTER TABLE council_runs ADD COLUMN IF NOT EXISTS pending_followups JSONB NOT NULL DEFAULT '[]'",
     "ALTER TABLE council_runs ADD COLUMN IF NOT EXISTS followup_target TEXT NOT NULL DEFAULT ''",
     # --- microsites new columns ---
+    "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS source_company TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS tenant_key TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS headline TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS tagline TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS summary TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE microsites ADD COLUMN IF NOT EXISTS council_run_id TEXT",
     # --- indexes ---
     "CREATE INDEX IF NOT EXISTS idx_council_runs_tenant_created ON council_runs(tenant_key, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_microsites_tenant_created ON microsites(tenant_key, created_at DESC)",
